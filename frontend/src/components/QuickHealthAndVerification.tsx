@@ -1,0 +1,280 @@
+// src/components/QuickHealthAndVerification.tsx
+import React from 'react';
+import { FcGoogle } from "react-icons/fc";
+import { FaApple, FaFacebookF, FaSms } from "react-icons/fa";
+import { IoShieldHalfOutline } from "react-icons/io5";
+
+const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => {
+  return <Icon className={className} />;
+};
+//page 2.3 src/components/QuickHealthAndVerification.tsx
+class QuickHealthAndVerification extends React.Component {
+  state = {
+    age: '',
+    gender: '',
+    conditions: {
+      backPain: false,
+      jointPain: false,
+      sportsInjury: false,
+      neckIssues: false,
+    },
+    activityLevel: 'Moderate',
+    agreeTerms: false,
+    agreeMarketing: false,
+  };
+
+  handleAgeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    this.setState({ age: e.target.value });
+  };
+
+  handleGenderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    this.setState({ gender: e.target.value });
+  };
+
+  handleConditionChange = (condition: keyof typeof this.state.conditions) => {
+    this.setState((prev: any) => ({
+      conditions: {
+        ...prev.conditions,
+        [condition]: !prev.conditions[condition],
+      },
+    }));
+  };
+
+  handleActivityChange = (level: string) => {
+    this.setState({ activityLevel: level });
+  };
+
+  handleTermsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    this.setState({ agreeTerms: e.target.checked });
+  };
+
+  handleMarketingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    this.setState({ agreeMarketing: e.target.checked });
+  };
+
+  render() {
+    const { age, gender, conditions, activityLevel, agreeTerms, agreeMarketing } = this.state;
+
+    return (
+      <div className="flex flex-col items-center">
+        <div className="w-full bg-gray-50 rounded-2xl shadow-lg p-6">
+          {/* ------------------- Quick Health Profile ------------------- */}
+          <h1 className=" text-xl font-bold text-gray-900 mb-5 text-left">
+            Quick Health Profile (Optional)
+          </h1>
+
+          {/* Age & Gender */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+            <div>
+              <label className="block text-xl font-semibold text-gray-500 mb-2">
+                Age
+              </label>
+              <select
+                value={age}
+                onChange={this.handleAgeChange}
+                className="w-full h-15 px-4 py-3 text-xl text-gray-700 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select age</option>
+                <option value="18-25">18-25</option>
+                <option value="26-35">26-35</option>
+                <option value="36-45">36-45</option>
+                <option value="46-55">46-55</option>
+                <option value="56+">55+</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xl font-semibold text-gray-500 mb-2">
+                Gender
+              </label>
+              <select
+                value={gender}
+                onChange={this.handleGenderChange}
+                className="w-full h-15 px-4 py-3 text-xl text-gray-700 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Conditions */}
+          <div className="mb-10">
+            <label className="block text-lg font-normal text-gray-600 mb-3">
+              Any previous injuries or conditions?
+            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={conditions.backPain}
+                  onChange={() => this.handleConditionChange('backPain')}
+                  className="h-5 w-5 text-blue-600 rounded border-gray-300"
+                />
+                <span className="text-gray-600 text-lg">Back pain</span>
+              </label>            
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={conditions.sportsInjury}
+                  onChange={() => this.handleConditionChange('sportsInjury')}
+                  className="h-5 w-5 text-blue-600 rounded border-gray-300"
+                />
+                <span className="text-gray-600 text-lg">Sports injury</span>
+              </label>
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={conditions.jointPain}
+                  onChange={() => this.handleConditionChange('jointPain')}
+                  className="h-5 w-5 text-blue-600 rounded border-gray-300"
+                />
+                <span className="text-gray-600 text-lg">Joint pain</span>
+              </label>
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={conditions.neckIssues}
+                  onChange={() => this.handleConditionChange('neckIssues')}
+                  className="h-5 w-5 text-blue-600 rounded border-gray-300"
+                />
+                <span className="text-gray-600 text-lg">Neck issues</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Activity Level */}
+          <div className="mb-10">
+            <label className="block text-xl font-semibold text-gray-600 mb-3">
+              Activity Level
+            </label>
+            <div className="flex gap-3">
+              {['Low', 'Moderate', 'High'].map(level => (
+                <button
+                  key={level}
+                  onClick={() => this.handleActivityChange(level)}
+                  className={`flex-1 py-3 rounded-lg font-medium transition-all ${
+                    activityLevel === level
+                      ? 'bg-blue-100 text-blue-600 border border-blue-300 shadow-md'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-200'
+                  }`}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Checkboxes consentement */}
+          <div className="space-y-4 mb-12">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={agreeTerms}
+                onChange={this.handleTermsChange}
+                className="h-6 w-6 mt-1 text-blue-600 rounded border-gray-300"
+              />
+              <span className="text-gray-700 text-xl">
+                I agree to the{' '}
+                <a href="/terms" className="text-blue-600 hover:underline">Terms of Service</a> and{' '}
+                <a href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</a>. I consent to receive health-related communications and understand that Physio AI provides matching services only.
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={agreeMarketing}
+                onChange={this.handleMarketingChange}
+                className="h-6 w-6 mt-1 text-blue-600 rounded-lg border-gray-600"
+              />
+              <span className="text-gray-700 text-xl">
+                I would like to receive updates about new features, health tips, and promotional offers via email/SMS.
+              </span>
+            </label>
+          </div>
+
+          {/* ------------------- Or continue with ------------------- */}
+          <div className="flex items-center justify-center gap-4 my-8 p-6">
+            <div className="flex-1 h-px bg-gray-300"></div>
+            <p className="text-center text-gray-500 text-xl font-semibold whitespace-nowrap">
+              Or continue with
+            </p>
+            <div className="flex-1 h-px bg-gray-300"></div>
+          </div>
+
+          <div className="space-y-4">
+            {/* Google */}
+            <button className="w-full h-20 flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-xl py-4 px-6 text-gray-800 font-medium hover:bg-gray-50 transition">
+              <span className="text-2xl font-bold"><IconWrapper icon={FcGoogle} /></span>
+              <div className="text-gray-600 text-xl">Continue with Google</div>              
+            </button>
+
+            {/* Apple */}
+            <button className="w-full h-20 flex items-center justify-center gap-3 bg-black text-white rounded-xl py-4 px-6 font-medium hover:bg-gray-900 transition">
+              <span className="text-2xl"><IconWrapper icon={FaApple} /></span>
+              <div className="text-gray-100 text-xl">Continue with Apple</div>
+            </button>
+
+            {/* Facebook */}
+            <button className="w-full h-20 flex items-center justify-center gap-3 bg-blue-600 text-white rounded-xl py-4 px-6 font-medium hover:bg-blue-700 transition">
+              <span className="text-2xl font-bold"><IconWrapper icon={FaFacebookF} /></span>
+              <div className="text-gray-100 text-xl">Continue with Facebook</div>
+            </button>
+          </div>
+
+          {/* ------------------- Secure Verification ------------------- */}
+          <div className="mt-12 bg-gradient-to-r from-green-50 to-blue-100 p-6">
+
+          {/* Header */}
+          <div className="flex items-center gap-4 mb-2">
+            <div className="w-14 h-14 bg-gradient-to-r to-green-400 from-blue-500 text-white font-bold rounded-full flex items-center justify-center">
+              <span className="text-white text-3xl">
+                <IconWrapper icon={IoShieldHalfOutline} />
+              </span>
+            </div>
+
+            <h3 className="text-xl font-bold text-gray-900">
+              Secure Verification
+              <p className="font-normal text-lg text-gray-700 mb-4">
+            We'll send you a verification code
+          </p>
+            </h3>
+          </div>
+
+          {/* Description UNDER title */}
+          
+
+          {/* SMS Verification */}
+          <div className="bg-white h-16 rounded-xl px-5 border border-gray-200 flex items-center justify-between">
+
+            {/* Left side */}
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <span className="text-blue-600 text-2xl">
+                  <IconWrapper icon={FaSms} />
+                </span>
+              </div>
+
+              <h4 className="font-semibold text-xl text-gray-700">
+                SMS Verification
+              </h4>
+            </div>
+
+            {/* Right side (Instant + dot) */}
+            <div className="flex items-center gap-2 text-ms text-green-500">
+              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+              Instant
+            </div>
+
+          </div>
+        </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default QuickHealthAndVerification;
