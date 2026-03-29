@@ -30,10 +30,13 @@ import TrustedReviews from './components/TrustedReviews';
 import CreateAccountFooter from './components/CreateAccountFooter';
 import WelcomeToPhysioAI from './pages/WelcomeToPhysioAI';
 import AIAssistantCompleteFlow from './pages/AIAssistantCompleteFlow';
+import PhysioBookingFlow from './pages/PhysioBookingFlow';
+import SpecialistProfile from './pages/SpecialistProfile';
+import BookSession from './pages/BookSession';
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
   <React.StrictMode>
-    <AIAssistantCompleteFlow />
+    <BookSession />
   </React.StrictMode>
 );
