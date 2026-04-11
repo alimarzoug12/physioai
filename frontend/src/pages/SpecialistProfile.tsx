@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FaDirections, FaThumbsUp } from 'react-icons/fa';
 import { FaAward, FaBolt, FaBrain, FaCalendar, FaCalendarPlus, FaCcMastercard, FaCcVisa, FaCheck, FaClock, FaComments, FaDumbbell, FaGraduationCap, FaHands, FaHeart, FaHospital, FaIdBadge, FaLanguage, FaLocationDot, FaMobileScreenButton, FaMoneyBill, FaPhone, FaShare, FaShieldHalved, FaSquareParking, FaStar, FaTag, FaTriangleExclamation, FaWhatsapp } from 'react-icons/fa6';
 import { IoArrowBackOutline } from 'react-icons/io5';
@@ -9,7 +10,10 @@ import { TbCircleDotted, TbMailFilled } from 'react-icons/tb';
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => {
   return <Icon className={className} />;
 };
-class SpecialistProfile extends React.Component {
+interface SpecialistProfileProps {
+  navigate?: (path: string) => void;
+}
+class SpecialistProfile extends React.Component<SpecialistProfileProps> {
   state = {
     helpful: 5,
     liked: false,
@@ -28,7 +32,7 @@ class SpecialistProfile extends React.Component {
       <div className="min-h-screen bg-gray-50 flex flex-col pb-20">
         {/* Header */}
         <header className="bg-white border-b border-gray-100 px-4 py-8 mx-1 flex items-center justify-between sticky top-0 z-10">
-          <button className="font-medium text-gray-600 text-3xl hover:text-gray-900 transition">
+          <button onClick={() => this.props.navigate?.(-1 as any)} className="font-medium text-gray-600 text-3xl hover:text-gray-900 transition">
             <IconWrapper icon={IoArrowBackOutline} />
           </button>
           <h1 className="text-3xl font-bold text-cyan-500">Specialist Profile</h1>
@@ -816,15 +820,15 @@ class SpecialistProfile extends React.Component {
 
           {/* Buttons */}
           <div className="grid grid-cols-2 gap-3">
-  <button className="bg-gradient-to-r from-blue-500 to-white hover:bg-blue-600 text-white py-4 rounded-2xl font-semibold text-xl transition flex items-center justify-center gap-2 shadow-lg">
-    <IconWrapper icon={FaCalendarPlus} />
-    Book Now
-  </button>
-  <button style={{ border: "3px solid #2563eb" }} className="text-blue-600 hover:bg-blue-50 py-4 rounded-2xl font-semibold text-2xl transition flex items-center justify-center gap-2">
-    <IconWrapper icon={FaComments} />
-    Chat First
-  </button>
-</div>
+            <button onClick={() => this.props.navigate?.('/book')} className="bg-gradient-to-r from-blue-500 to-white hover:bg-blue-600 text-white py-4 rounded-2xl font-semibold text-xl transition flex items-center justify-center gap-2 shadow-lg">
+              <IconWrapper icon={FaCalendarPlus} />
+              Book Now
+            </button>
+            <button onClick={() => this.props.navigate?.('/ai-assistant')} style={{ border: "3px solid #2563eb" }} className="text-blue-600 hover:bg-blue-50 py-4 rounded-2xl font-semibold text-2xl transition flex items-center justify-center gap-2">
+              <IconWrapper icon={FaComments} />
+              Chat First
+            </button>
+          </div>
         </div>
 
       </div>
@@ -832,4 +836,9 @@ class SpecialistProfile extends React.Component {
   }
 }
 
-export default SpecialistProfile;
+function SpecialistProfileWithRouter() {
+  const navigate = useNavigate();
+  return <SpecialistProfile navigate={navigate} />;
+}
+
+export default SpecialistProfileWithRouter;

@@ -1,14 +1,20 @@
 // src/components/CreateAccountFooter.tsx
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const CreateAccountFooter = () => {
+interface Props {
+  activeTab: 'signup' | 'login';
+}
+
+const CreateAccountFooter = ({ activeTab }: Props) => {
+  const navigate = useNavigate();
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-2xl z-50">
       <div className="mx-auto px-4 py-6 space-y-4">
-        
+
         {/* Create Account Button */}
-        <button className="w-full h-16 rounded-2xl bg-gradient-to-r from-blue-500 to-emerald-300 text-white font-semibold text-xl shadow-lg active:scale-[0.97] transition-transform">
-          Create Account
+        <button onClick={() => navigate('/dashboard')} className="w-full h-16 rounded-2xl bg-gradient-to-r from-blue-500 to-emerald-300 text-white font-semibold text-xl shadow-lg active:scale-[0.97] transition-transform">
+          {activeTab === 'signup' ? 'Create Account' : 'Log In'}
         </button>
 
         {/* Continue as Guest */}

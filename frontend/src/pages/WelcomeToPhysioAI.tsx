@@ -8,18 +8,27 @@ import TrustedReviews from '../components/TrustedReviews';
 import CreateAccountFooter from '../components/CreateAccountFooter';
 //page 2 src/pages/WelcomeToPhysioAI.tsx
 class WelcomeToPhysioAI extends React.Component {
+  state = {
+    activeTab: 'signup' as 'signup' | 'login',
+  };
+
+  setActiveTab = (tab: 'signup' | 'login') => {
+    this.setState({ activeTab: tab });
+  };
     render() {
       return (
         <div>
             <div className="pb-64">
-            <WelcomeGetStarted />
-            <SignUpForm />
+            <WelcomeGetStarted
+            activeTab={this.state.activeTab}
+            setActiveTab={this.setActiveTab}
+          />
             <QuickHealthAndVerification />
             <SecurityAndLanguage />
             <SupportHelpSection />
             <TrustedReviews />
             </div>
-            <CreateAccountFooter />
+            <CreateAccountFooter activeTab={this.state.activeTab} />
         </div>  
     );
   }

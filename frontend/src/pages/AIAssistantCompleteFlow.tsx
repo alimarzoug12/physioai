@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FaBrain, FaCheckDouble, FaDumbbell, FaRobot, FaCheck, FaClock, FaUserDoctor, FaTriangleExclamation, FaPlus } from "react-icons/fa6";
 import { FiCheck, FiPlus } from 'react-icons/fi';
 import { HiArrowLeft, HiHome } from "react-icons/hi";
@@ -8,7 +9,7 @@ import { FaRunning, FaSmile } from "react-icons/fa";
 import { IoIosSend } from "react-icons/io";
 import { FaMicrophone, FaCamera, FaVideo, FaFileMedical } from 'react-icons/fa6';
 
-//page 3 src/components/AIAssistantCompleteFlow.tsx
+//page 3 src/pages/AIAssistantCompleteFlow.tsx
 interface Message {
   id: number;
   sender: 'ai' | 'user';
@@ -31,8 +32,11 @@ interface AppState {
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => {
   return <Icon className={className} />;
 };
+interface AIAssistantCompleteFlowProps {
+  navigate?: (path: string) => void;
+}
 
-class AIAssistantCompleteFlow extends React.Component<{}, AppState> {
+class AIAssistantCompleteFlow extends React.Component<AIAssistantCompleteFlowProps, AppState> {
   state: AppState = {
     messages: [
       {
@@ -486,7 +490,7 @@ class AIAssistantCompleteFlow extends React.Component<{}, AppState> {
             </div>
           </div>
 
-          <button className="w-full mt-8 bg-gradient-to-r from-blue-500 to-blue-50 text-2xl text-white font-normal py-4 rounded-2xl shadow-lg hover:from-blue-600 hover:to-cyan-600 transition">
+          <button onClick={() => this.props.navigate?.('/specialists')} className="w-full mt-8 bg-gradient-to-r from-blue-500 to-blue-50 text-2xl text-white font-normal py-4 rounded-2xl shadow-lg hover:from-blue-600 hover:to-cyan-600 transition">
             Find Specialists Near You
           </button>
         </div>
@@ -516,7 +520,7 @@ class AIAssistantCompleteFlow extends React.Component<{}, AppState> {
       <div className="flex flex-col h-screen bg-gray-50">
         {/* Header fixe */}
         <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between sticky top-0 z-10">
-          <button className="text-gray-600 text-3xl hover:text-gray-900"><IconWrapper icon={HiArrowLeft} /></button>
+          <button onClick={() => this.props.navigate?.(-1 as any)} className="text-gray-600 text-3xl hover:text-gray-900"><IconWrapper icon={HiArrowLeft} /></button>
           <div className="text-center">
             <h1 className="text-3xl font-medium text-cyan-500">AI Assistant</h1>
             <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
@@ -524,7 +528,7 @@ class AIAssistantCompleteFlow extends React.Component<{}, AppState> {
               Online & Ready
             </div>
           </div>
-          <button className="text-3xl font-medium text-gray-600 hover:text-gray-900">
+          <button onClick={() => this.props.navigate?.('/settings')} className="text-3xl font-medium text-gray-600 hover:text-gray-900">
             <IconWrapper icon={BsThreeDotsVertical} />
           </button>
         </header>
@@ -579,4 +583,9 @@ class AIAssistantCompleteFlow extends React.Component<{}, AppState> {
   }
 }
 
-export default AIAssistantCompleteFlow;
+function AIAssistantCompleteFlowWithRouter() {
+  const navigate = useNavigate();
+  return <AIAssistantCompleteFlow navigate={navigate} />;
+}
+
+export default AIAssistantCompleteFlowWithRouter;

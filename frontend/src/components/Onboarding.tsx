@@ -10,14 +10,14 @@ import {
   FaBrain, 
   FaStar, 
   FaChartLine,
-  FaShieldAlt,
-  FaLock
-} from 'react-icons/fa';
+  FaLock,
+  FaRoute
+} from 'react-icons/fa6';
 import { LiaCertificateSolid } from 'react-icons/lia';
-import { GiPathDistance } from 'react-icons/gi';
 import { HiHome, HiMiniCreditCard } from 'react-icons/hi2';
 import { IoChatbubbles } from 'react-icons/io5';
 import { HiArrowLeft } from "react-icons/hi";
+import { FaShieldAlt, } from 'react-icons/fa';
 
 // ========================================================
 
@@ -69,7 +69,7 @@ const slides: Slide[] = [
     features: [
       { icon: LiaCertificateSolid as IconComponent, text: "Licensed Professionals", iconColor: "text-yellow-500" },
       { icon: FaStar as IconComponent, text: "Verified Reviews", iconColor: "text-orange-400" },
-      { icon: GiPathDistance as IconComponent, text: "Distance & Availability", iconColor: "text-blue-400" },
+      { icon: FaRoute as IconComponent, text: "Distance & Availability", iconColor: "text-blue-400" },
     ]
   },
   {
@@ -131,7 +131,7 @@ class Onboarding extends React.Component {
           {currentStep + 1} OF {slides.length}
         </span>
 
-        <button className="text-blue-500 font-normal text-1xl hover:underline">Skip</button>
+        <button className="text-blue-500 font-normal text-xl">Skip</button>
       </div>
 
         {/* Progress Bar - WIDER */}
