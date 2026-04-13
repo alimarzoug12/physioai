@@ -14,10 +14,12 @@ const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string 
 interface Props {
   activeTab: 'signup' | 'login';
   setActiveTab: (tab: 'signup' | 'login') => void;
+  onSignupDataChange?: (data: any) => void;
+  onLoginDataChange?: (data: any) => void;
 }
 
 class WelcomeGetStarted extends React.Component<Props> {
-  
+
 
   render() {
     return (
@@ -90,33 +92,37 @@ class WelcomeGetStarted extends React.Component<Props> {
 
             {/* SIGN UP */}
             <button
-  type="button"
-  onClick={() => this.props.setActiveTab('signup')}
-  className={`flex-1 mt-1 mb-1 ml-1 font-semibold text-xl py-5 px-8 rounded-xl
+              type="button"
+              onClick={() => this.props.setActiveTab('signup')}
+              className={`flex-1 mt-1.5 mb-1.5 ml-1.5 font-semibold text-xl py-5 px-8 rounded-2xl
     ${this.props.activeTab === 'signup'
-      ? 'bg-gradient-to-r from-blue-500 to-green-400 text-white'
-      : 'bg-gray-100 text-gray-600'}
+                  ? 'bg-gradient-to-r from-blue-500 to-green-400 text-white'
+                  : 'bg-gray-100 text-gray-600'}
   `}
->
-  Sign Up
-</button>
+            >
+              Sign Up
+            </button>
 
-<button
-  type="button"
-  onClick={() => this.props.setActiveTab('login')}
-  className={`flex-1 font-semibold text-xl py-5 px-8 rounded-2xl
+            <button
+              type="button"
+              onClick={() => this.props.setActiveTab('login')}
+              className={`flex-1 mt-1.5 mb-1.5 mr-1.5 font-semibold text-xl py-5 px-8 rounded-2xl
     ${this.props.activeTab === 'login'
-      ? 'bg-gradient-to-r from-blue-500 to-green-400 text-white'
-      : 'bg-gray-100 text-gray-600'}
+                  ? 'bg-gradient-to-r from-blue-500 to-green-400 text-white'
+                  : 'bg-gray-100 text-gray-600'}
   `}
->
-  Log In
-</button>
+            >
+              Log In
+            </button>
 
           </div>
 
           {/* Form */}
-          <SignUpForm activeTab={this.props.activeTab} />
+          <SignUpForm
+            activeTab={this.props.activeTab}
+            onSignupDataChange={this.props.onSignupDataChange}
+            onLoginDataChange={this.props.onLoginDataChange}
+          />
 
         </div>
       </div>

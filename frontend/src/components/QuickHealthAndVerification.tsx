@@ -3,12 +3,171 @@ import React from 'react';
 import { FcGoogle } from "react-icons/fc";
 import { FaApple, FaFacebookF, FaSms } from "react-icons/fa";
 import { IoShieldHalfOutline } from "react-icons/io5";
+import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => {
   return <Icon className={className} />;
 };
-//page 2.3 src/components/QuickHealthAndVerification.tsx
-class QuickHealthAndVerification extends React.Component {
+
+// ── OAuth buttons need hooks, so wrap in a functional component ──
+interface OAuthButtonsProps {
+  onError: (msg: string) => void;
+  onLoading: (loading: boolean) => void;
+}
+
+function OAuthButtons({ onError, onLoading }: OAuthButtonsProps) {
+  const { login } = useAuth();
+  const navigate  = useNavigate();
+
+  // ── Google ────────────────────────────────────────────────────
+  const handleGoogle = () => {
+    // Load Google Identity Services script if not already loaded
+    if (!(window as any).google) {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.onload = () => initGoogle();
+      document.body.appendChild(script);
+    } else {
+      initGoogle();
+    }
+  };
+
+  const initGoogle = () => {
+    (window as any).google.accounts.id.initialize({
+      client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID || '',
+      callback: async (response: any) => {
+        try {
+          onLoading(true);
+          const result = await api.googleAuth(response.credential);
+          login(result.token, result.user);
+          navigate('/dashboard');
+        } catch (err: any) {
+          onError(err.message || 'Google login failed');
+        } finally {
+          onLoading(false);
+        }
+      },
+    });
+    (window as any).google.accounts.id.prompt();
+  };
+
+  // ── Facebook ──────────────────────────────────────────────────
+  const handleFacebook = () => {
+    // Load Facebook SDK if not already loaded
+    if (!(window as any).FB) {
+      const script = document.createElement('script');
+      script.src = 'https://connect.facebook.net/en_US/sdk.js';
+      script.onload = () => {
+        (window as any).FB.init({
+          appId: process.env.REACT_APP_FACEBOOK_APP_ID || '',
+          version: 'v18.0',
+        });
+        triggerFacebookLogin();
+      };
+      document.body.appendChild(script);
+    } else {
+      triggerFacebookLogin();
+    }
+  };
+
+  const triggerFacebookLogin = () => {
+    (window as any).FB.login(async (response: any) => {
+      if (response.authResponse) {
+        try {
+          onLoading(true);
+          const result = await api.facebookAuth(response.authResponse.accessToken);
+          login(result.token, result.user);
+          navigate('/dashboard');
+        } catch (err: any) {
+          onError(err.message || 'Facebook login failed');
+        } finally {
+          onLoading(false);
+        }
+      }
+    }, { scope: 'email,public_profile' });
+  };
+
+  // ── Apple ─────────────────────────────────────────────────────
+  const handleApple = () => {
+    // Load Apple JS if not already loaded
+    if (!(window as any).AppleID) {
+      const script = document.createElement('script');
+      script.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
+      script.onload = () => triggerAppleLogin();
+      document.body.appendChild(script);
+    } else {
+      triggerAppleLogin();
+    }
+  };
+
+  const triggerAppleLogin = async () => {
+    try {
+      (window as any).AppleID.auth.init({
+        clientId: process.env.REACT_APP_APPLE_CLIENT_ID || '',
+        scope: 'name email',
+        redirectURI: window.location.origin,
+        usePopup: true,
+      });
+
+      const response = await (window as any).AppleID.auth.signIn();
+      const identityToken = response.authorization.id_token;
+      const fullName = response.user
+        ? `${response.user.name?.firstName || ''} ${response.user.name?.lastName || ''}`.trim()
+        : undefined;
+
+      onLoading(true);
+      const result = await api.appleAuth(identityToken, fullName);
+      login(result.token, result.user);
+      navigate('/dashboard');
+    } catch (err: any) {
+      if (err?.error !== 'popup_closed_by_user') {
+        onError(err.message || 'Apple login failed');
+      }
+    } finally {
+      onLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Google */}
+      <button
+        onClick={handleGoogle}
+        className="w-full h-20 flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-xl py-4 px-6 text-gray-800 font-medium hover:bg-gray-50 transition"
+      >
+        <span className="text-2xl font-bold"><IconWrapper icon={FcGoogle} /></span>
+        <div className="text-gray-600 text-xl">Continue with Google</div>
+      </button>
+
+      {/* Apple */}
+      <button
+        onClick={handleApple}
+        className="w-full h-20 flex items-center justify-center gap-3 bg-black text-white rounded-xl py-4 px-6 font-medium hover:bg-gray-900 transition"
+      >
+        <span className="text-2xl"><IconWrapper icon={FaApple} /></span>
+        <div className="text-gray-100 text-xl">Continue with Apple</div>
+      </button>
+
+      {/* Facebook */}
+      <button
+        onClick={handleFacebook}
+        className="w-full h-20 flex items-center justify-center gap-3 bg-blue-600 text-white rounded-xl py-4 px-6 font-medium hover:bg-blue-700 transition"
+      >
+        <span className="text-2xl font-bold"><IconWrapper icon={FaFacebookF} /></span>
+        <div className="text-gray-100 text-xl">Continue with Facebook</div>
+      </button>
+    </div>
+  );
+}
+
+// ── Main class component ──────────────────────────────────────────
+interface QuickHealthProps {
+  onHealthDataChange?: (data: any) => void;
+}
+
+class QuickHealthAndVerification extends React.Component<QuickHealthProps> {
   state = {
     age: '',
     gender: '',
@@ -21,14 +180,20 @@ class QuickHealthAndVerification extends React.Component {
     activityLevel: 'Moderate',
     agreeTerms: false,
     agreeMarketing: false,
+    oauthError: '',
+    oauthLoading: false,
   };
 
   handleAgeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    this.setState({ age: e.target.value });
+    this.setState({ age: e.target.value }, () => {
+      this.props.onHealthDataChange?.(this.getHealthData());
+    });
   };
 
   handleGenderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    this.setState({ gender: e.target.value });
+    this.setState({ gender: e.target.value }, () => {
+      this.props.onHealthDataChange?.(this.getHealthData());
+    });
   };
 
   handleConditionChange = (condition: keyof typeof this.state.conditions) => {
@@ -37,12 +202,23 @@ class QuickHealthAndVerification extends React.Component {
         ...prev.conditions,
         [condition]: !prev.conditions[condition],
       },
-    }));
+    }), () => {
+      this.props.onHealthDataChange?.(this.getHealthData());
+    });
   };
 
   handleActivityChange = (level: string) => {
-    this.setState({ activityLevel: level });
+    this.setState({ activityLevel: level }, () => {
+      this.props.onHealthDataChange?.(this.getHealthData());
+    });
   };
+
+  getHealthData = () => ({
+    age: this.state.age,
+    gender: this.state.gender,
+    conditions: this.state.conditions,
+    activityLevel: this.state.activityLevel,
+  });
 
   handleTermsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     this.setState({ agreeTerms: e.target.checked });
@@ -53,22 +229,20 @@ class QuickHealthAndVerification extends React.Component {
   };
 
   render() {
-    const { age, gender, conditions, activityLevel, agreeTerms, agreeMarketing } = this.state;
+    const { age, gender, conditions, activityLevel, agreeTerms, agreeMarketing, oauthError, oauthLoading } = this.state;
 
     return (
       <div className="flex flex-col items-center">
         <div className="w-full bg-gray-50 rounded-2xl shadow-lg p-6">
-          {/* ------------------- Quick Health Profile ------------------- */}
-          <h1 className=" text-xl font-bold text-gray-900 mb-5 text-left">
+          {/* Quick Health Profile */}
+          <h1 className="text-xl font-bold text-gray-900 mb-5 text-left">
             Quick Health Profile (Optional)
           </h1>
 
           {/* Age & Gender */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
             <div>
-              <label className="block text-xl font-semibold text-gray-500 mb-2">
-                Age
-              </label>
+              <label className="block text-xl font-semibold text-gray-500 mb-2">Age</label>
               <select
                 value={age}
                 onChange={this.handleAgeChange}
@@ -82,11 +256,8 @@ class QuickHealthAndVerification extends React.Component {
                 <option value="56+">55+</option>
               </select>
             </div>
-
             <div>
-              <label className="block text-xl font-semibold text-gray-500 mb-2">
-                Gender
-              </label>
+              <label className="block text-xl font-semibold text-gray-500 mb-2">Gender</label>
               <select
                 value={gender}
                 onChange={this.handleGenderChange}
@@ -106,50 +277,28 @@ class QuickHealthAndVerification extends React.Component {
               Any previous injuries or conditions?
             </label>
             <div className="grid grid-cols-2 gap-4">
-              <label className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={conditions.backPain}
-                  onChange={() => this.handleConditionChange('backPain')}
-                  className="h-5 w-5 text-blue-600 rounded border-gray-300"
-                />
-                <span className="text-gray-600 text-lg">Back pain</span>
-              </label>            
-              <label className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={conditions.sportsInjury}
-                  onChange={() => this.handleConditionChange('sportsInjury')}
-                  className="h-5 w-5 text-blue-600 rounded border-gray-300"
-                />
-                <span className="text-gray-600 text-lg">Sports injury</span>
-              </label>
-              <label className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={conditions.jointPain}
-                  onChange={() => this.handleConditionChange('jointPain')}
-                  className="h-5 w-5 text-blue-600 rounded border-gray-300"
-                />
-                <span className="text-gray-600 text-lg">Joint pain</span>
-              </label>
-              <label className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={conditions.neckIssues}
-                  onChange={() => this.handleConditionChange('neckIssues')}
-                  className="h-5 w-5 text-blue-600 rounded border-gray-300"
-                />
-                <span className="text-gray-600 text-lg">Neck issues</span>
-              </label>
+              {[
+                { key: 'backPain',     label: 'Back pain'     },
+                { key: 'sportsInjury', label: 'Sports injury' },
+                { key: 'jointPain',    label: 'Joint pain'    },
+                { key: 'neckIssues',   label: 'Neck issues'   },
+              ].map(({ key, label }) => (
+                <label key={key} className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={conditions[key as keyof typeof conditions]}
+                    onChange={() => this.handleConditionChange(key as keyof typeof conditions)}
+                    className="h-5 w-5 text-blue-600 rounded border-gray-300"
+                  />
+                  <span className="text-gray-600 text-lg">{label}</span>
+                </label>
+              ))}
             </div>
           </div>
 
           {/* Activity Level */}
           <div className="mb-10">
-            <label className="block text-xl font-semibold text-gray-600 mb-3">
-              Activity Level
-            </label>
+            <label className="block text-xl font-semibold text-gray-600 mb-3">Activity Level</label>
             <div className="flex gap-3">
               {['Low', 'Moderate', 'High'].map(level => (
                 <button
@@ -167,7 +316,7 @@ class QuickHealthAndVerification extends React.Component {
             </div>
           </div>
 
-          {/* Checkboxes consentement */}
+          {/* Consent checkboxes */}
           <div className="space-y-4 mb-12">
             <label className="flex items-start gap-3">
               <input
@@ -179,10 +328,9 @@ class QuickHealthAndVerification extends React.Component {
               <span className="text-gray-700 text-xl">
                 I agree to the{' '}
                 <a href="/terms" className="text-blue-600 hover:underline">Terms of Service</a> and{' '}
-                <a href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</a>. I consent to receive health-related communications and understand that Physio AI provides matching services only.
+                <a href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</a>. I consent to receive health-related communications.
               </span>
             </label>
-
             <label className="flex items-start gap-3">
               <input
                 type="checkbox"
@@ -196,7 +344,7 @@ class QuickHealthAndVerification extends React.Component {
             </label>
           </div>
 
-          {/* ------------------- Or continue with ------------------- */}
+          {/* Or continue with */}
           <div className="flex items-center justify-center gap-4 my-8 p-6">
             <div className="flex-1 h-px bg-gray-300"></div>
             <p className="text-center text-gray-500 text-xl font-semibold whitespace-nowrap">
@@ -205,72 +353,54 @@ class QuickHealthAndVerification extends React.Component {
             <div className="flex-1 h-px bg-gray-300"></div>
           </div>
 
-          <div className="space-y-4">
-            {/* Google */}
-            <button className="w-full h-20 flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-xl py-4 px-6 text-gray-800 font-medium hover:bg-gray-50 transition">
-              <span className="text-2xl font-bold"><IconWrapper icon={FcGoogle} /></span>
-              <div className="text-gray-600 text-xl">Continue with Google</div>              
-            </button>
-
-            {/* Apple */}
-            <button className="w-full h-20 flex items-center justify-center gap-3 bg-black text-white rounded-xl py-4 px-6 font-medium hover:bg-gray-900 transition">
-              <span className="text-2xl"><IconWrapper icon={FaApple} /></span>
-              <div className="text-gray-100 text-xl">Continue with Apple</div>
-            </button>
-
-            {/* Facebook */}
-            <button className="w-full h-20 flex items-center justify-center gap-3 bg-blue-600 text-white rounded-xl py-4 px-6 font-medium hover:bg-blue-700 transition">
-              <span className="text-2xl font-bold"><IconWrapper icon={FaFacebookF} /></span>
-              <div className="text-gray-100 text-xl">Continue with Facebook</div>
-            </button>
-          </div>
-
-          {/* ------------------- Secure Verification ------------------- */}
-          <div className="mt-12 bg-gradient-to-r from-green-50 to-blue-100 p-6">
-
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-2">
-            <div className="w-14 h-14 bg-gradient-to-r to-green-400 from-blue-500 text-white font-bold rounded-full flex items-center justify-center">
-              <span className="text-white text-3xl">
-                <IconWrapper icon={IoShieldHalfOutline} />
-              </span>
+          {/* OAuth error message */}
+          {oauthError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+              <p className="text-red-500 text-center text-lg">{oauthError}</p>
             </div>
+          )}
 
-            <h3 className="text-xl font-bold text-gray-900">
-              Secure Verification
-              <p className="font-normal text-lg text-gray-700 mb-4">
-            We'll send you a verification code
-          </p>
-            </h3>
-          </div>
+          {/* OAuth loading */}
+          {oauthLoading && (
+            <div className="text-center text-blue-500 text-lg mb-4">Signing in...</div>
+          )}
 
-          {/* Description UNDER title */}
-          
+          {/* ONLY ADDITION: real OAuth buttons via OAuthButtons component */}
+          <OAuthButtons
+            onError={(msg) => this.setState({ oauthError: msg, oauthLoading: false })}
+            onLoading={(loading) => this.setState({ oauthLoading: loading, oauthError: '' })}
+          />
 
-          {/* SMS Verification */}
-          <div className="bg-white h-16 rounded-xl px-5 border border-gray-200 flex items-center justify-between">
-
-            {/* Left side */}
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 flex items-center justify-center">
-                <span className="text-blue-600 text-2xl">
-                  <IconWrapper icon={FaSms} />
+          {/* Secure Verification */}
+          <div className="mt-12 bg-gradient-to-r from-green-50 to-blue-100 p-6">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-14 h-14 bg-gradient-to-r to-green-400 from-blue-500 text-white font-bold rounded-full flex items-center justify-center">
+                <span className="text-white text-3xl">
+                  <IconWrapper icon={IoShieldHalfOutline} />
                 </span>
               </div>
-
-              <h4 className="font-semibold text-xl text-gray-700">
-                SMS Verification
-              </h4>
+              <h3 className="text-xl font-bold text-gray-900">
+                Secure Verification
+                <p className="font-normal text-lg text-gray-700 mb-4">
+                  We'll send you a verification code
+                </p>
+              </h3>
             </div>
-
-            {/* Right side (Instant + dot) */}
-            <div className="flex items-center gap-2 text-ms text-green-500">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              Instant
+            <div className="bg-white h-16 rounded-xl px-5 border border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 flex items-center justify-center">
+                  <span className="text-blue-600 text-2xl">
+                    <IconWrapper icon={FaSms} />
+                  </span>
+                </div>
+                <h4 className="font-semibold text-xl text-gray-700">SMS Verification</h4>
+              </div>
+              <div className="flex items-center gap-2 text-ms text-green-500">
+                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                Instant
+              </div>
             </div>
-
           </div>
-        </div>
         </div>
       </div>
     );

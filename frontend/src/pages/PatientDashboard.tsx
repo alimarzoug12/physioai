@@ -4,31 +4,71 @@ import { FaCalendarCheck, FaStar, FaHeartPulse, FaDumbbell, FaChartLine, FaTroph
 import { IoIosWater, IoMdNotifications, IoMdSettings } from 'react-icons/io';
 import { BsChatFill } from 'react-icons/bs';
 import { FaHistory } from 'react-icons/fa';
+// ONLY ADDITION: import useAuth
+import { useAuth } from '../context/AuthContext';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => {
   return <Icon className={className} />;
 };
-//Page 7 src/pages/PatientDashboard.tsx
+
+// ONLY ADDITION: added user prop to receive data from AuthContext
 interface PatientDashboardProps {
   navigate?: (path: string) => void;
+  user?: {
+    id: string;
+    email: string;
+    fullName: string;
+    role: string;
+  } | null;
 }
 
-//Page 7 src/pages/PatientDashboard.tsx
+// helper: get first name from full name
+function getFirstName(fullName?: string): string {
+  if (!fullName) return 'there';
+  return fullName.split(' ')[0];
+}
+
+// helper: get greeting based on time of day
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good Morning';
+  if (hour < 18) return 'Good Afternoon';
+  return 'Good Evening';
+}
+
+// helper: generate avatar initials fallback URL
+function getAvatarUrl(fullName?: string): string {
+  const initials = fullName
+    ? fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'U';
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName || 'User')}&background=3b82f6&color=fff&size=128`;
+}
+
 class PatientDashboard extends React.Component<PatientDashboardProps> {
   render() {
+    // ONLY ADDITION: use real user data if available, fall back to static
+    const { user } = this.props;
+    const firstName  = getFirstName(user?.fullName);
+    const greeting   = getGreeting();
+    const avatarUrl  = getAvatarUrl(user?.fullName);
+    const fullName   = user?.fullName || 'Ahmed';
+    const userEmail  = user?.email || '';
+
     return (
       <div className="min-h-screen bg-gray-50 pb-24">
 
         {/* Header */}
         <header className="bg-white border-b border-gray-100 p-6 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-4">
+            {/* ONLY CHANGE: replaced static img src with dynamic avatarUrl */}
             <img
-              src="https://randomuser.me/api/portraits/men/32.jpg"
-              alt="Ahmed"
+              src={avatarUrl}
+              alt={fullName}
               className="w-16 h-16 rounded-full object-cover"
             />
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Good Morning, Ahmed</h2>
+              {/* ONLY CHANGE: replaced "Ahmed" with real firstName and dynamic greeting */}
+              <h2 className="text-2xl font-bold text-gray-900">{greeting}, {firstName}</h2>
               <p className="text-xl text-gray-500 flex items-center gap-2">
                 <span className="w-3 h-3 bg-green-500 rounded-full inline-block"></span>
                 Ready for your wellness journey
@@ -36,8 +76,6 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
             </div>
           </div>
           <div className="flex items-center gap-6">
-
-            {/* Notifications icon */}
             <button
               className="relative"
               onClick={() => this.props.navigate?.('/notifications')}
@@ -45,15 +83,12 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
               <span className="text-3xl text-gray-600"><IconWrapper icon={IoMdNotifications} /></span>
               <span className="absolute -top-4 -right-4 bg-red-500 text-white border-2 border-white text-lg rounded-full w-7 h-7 flex items-center justify-center">3</span>
             </button>
-
-            {/* Settings icon */}
             <button
               className="text-3xl text-gray-600"
               onClick={() => this.props.navigate?.('/settings')}
             >
               <IconWrapper icon={IoMdSettings} />
             </button>
-
           </div>
         </header>
 
@@ -62,7 +97,8 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
           <div className="absolute right-6 top-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-white/10 flex items-center justify-center">
             <span className="text-white text-3xl"><IconWrapper icon={FaHeartPulse} /></span>
           </div>
-          <h1 className="text-4xl font-bold mb-3">Welcome back! 👋</h1>
+          {/* ONLY CHANGE: dynamic first name in welcome message */}
+          <h1 className="text-4xl font-bold mb-3">Welcome back, {firstName}! 👋</h1>
           <p className="text-white/80 text-xl mb-4">Your health journey continues with personalized care</p>
           <div className="flex items-center gap-6 text-xl">
             <div className="flex items-center gap-2">
@@ -277,11 +313,11 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
 
         {/* AI Assistant Banner */}
         <div className="mx-6 bg-gradient-to-r from-blue-500 to-blue-20 rounded-2xl p-6 text-white relative overflow-hidden">
-          <div className="absolute right-8 top-1/2 -translate-y-1/2 opacity-10 text-6xl text-white bg-white/70  rounded-full w-24 h-24 flex items-center justify-center">
+          <div className="absolute right-8 top-1/2 -translate-y-1/2 opacity-10 text-6xl text-white bg-white/70 rounded-full w-24 h-24 flex items-center justify-center">
             <IconWrapper icon={FaComments} />
           </div>
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-12 h-12 rou nded-full bg-white/20 rounded-full flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
               <span className="text-2xl"><IconWrapper icon={FaRobot} className="text-white" /></span>
             </div>
             <span className="font-medium text-2xl">AI Assistant</span>
@@ -490,39 +526,16 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
           </button>
         </div>
 
-        {/* Bottom Nav */}
-        {/* <nav className="bg-white border-t border-gray-100 py-3 px-4 fixed bottom-0 left-0 right-0 z-20">
-          <div className="max-w-4xl mx-auto flex items-center justify-around">
-            {[
-              { icon: FaChartLine, label: 'Home', active: true },
-              { icon: FaCalendar, label: 'Sessions', active: false },
-              { icon: FaRobot, label: 'AI Chat', active: false, center: true },
-              { icon: FaChartLine, label: 'Progress', active: false },
-              { icon: FaUserDoctor, label: 'Profile', active: false },
-            ].map(({ icon, label, active, center }) => (
-              <button key={label} className={`flex flex-col items-center gap-1 ${active ? 'text-blue-500' : 'text-gray-400'}`}>
-                {center ? (
-                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 text-xl -mt-4 shadow-md">
-                    <span className=""><IconWrapper icon={icon} /></span>
-                  </div>
-                ) : (
-                  <span className="text-xl"><IconWrapper icon={icon} /></span>
-                )}
-                <span className="text-xs">{label}</span>
-              </button>
-            ))}
-          </div>
-        </nav> */}
-
       </div>
     );
   }
 }
 
-// export default PatientDashboard;
+// ONLY CHANGE: pass real user from AuthContext into the dashboard
 function PatientDashboardWithRouter() {
   const navigate = useNavigate();
-  return <PatientDashboard navigate={navigate} />;
+  const { user } = useAuth();
+  return <PatientDashboard navigate={navigate} user={user} />;
 }
 
 export default PatientDashboardWithRouter;

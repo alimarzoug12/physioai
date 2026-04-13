@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { FaSearch } from 'react-icons/fa';
 import {
   FaArrowLeft, FaCircleCheck, FaCrown, FaUserPen, FaShieldHalved, FaWallet,
@@ -40,11 +41,27 @@ const SettingRow = ({ icon, iconClass, label, sub, right, bg }: any) => (
     {right}
   </div>
 );
+function getAvatarUrl(fullName?: string): string {
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName || 'User')}&background=3b82f6&color=fff&size=128`;
+}
 interface SettingsProps {
   navigate?: (path: string) => void;
+  user?: {
+    id: string;
+    email: string;
+    fullName: string;
+    role: string;
+  } | null;
+  onLogout?: () => void;
 }
+
 class Settings extends React.Component<SettingsProps> {
   render() {
+    const { user } = this.props;
+    const fullName = user?.fullName || 'Ahmed Al-Mansouri';
+    const email = user?.email || 'ahmed.almansouri@email.com';
+    const avatarUrl = getAvatarUrl(user?.fullName);
+    const role = user?.role || 'PATIENT';
     return (
       <div className="bg-gray-50 min-h-screen pb-10">
 
@@ -64,20 +81,28 @@ class Settings extends React.Component<SettingsProps> {
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <div className="flex items-center gap-5 mb-5">
               <div className="relative">
-                <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Ahmed" className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-lg" />
+                {/* CHANGED: dynamic avatar */}
+                <img
+                  src={avatarUrl}
+                  alt={fullName}
+                  className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-lg"
+                />
                 <div className="absolute -bottom-1 -right-1 bg-white rounded-full border-2 border-white flex items-center justify-center">
                   <IconWrapper icon={FaCircleCheck} className="text-green-500 text-2xl" />
                 </div>
               </div>
               <div className="flex-1 space-y-2">
-                <h2 className="text-2xl font-bold text-gray-900">Ahmed Al-Mansouri</h2>
-                <p className="text-gray-500 text-xl">ahmed.almansouri@email.com</p>
+                {/* CHANGED: dynamic name and email */}
+                <h2 className="text-2xl font-bold text-gray-900">{fullName}</h2>
+                <p className="text-gray-500 text-xl">{email}</p>
                 <div className="flex gap-2 mt-1">
                   <span className="flex items-center gap-1 bg-green-100 text-green-600 px-3 py-1 rounded-full text-lg">
                     <span className='w-3 h-3 bg-green-500 rounded-full'></span> Verified
                   </span>
                   <span className="flex items-center gap-1 bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-lg">
-                    <IconWrapper icon={FaCrown} className="text-xl" /> Premium
+                    <IconWrapper icon={FaCrown} className="text-xl" />
+                    {/* CHANGED: dynamic role */}
+                    {role === 'ADMIN' ? 'Admin' : role === 'DOCTOR' ? 'Doctor' : 'Premium'}
                   </span>
                 </div>
               </div>
@@ -124,8 +149,8 @@ class Settings extends React.Component<SettingsProps> {
           <h3 className="text-2xl font-bold text-gray-900 mb-5">Personal Information</h3>
           <div className="space-y-5">
             {[
-              { icon: FaUser, iconClass: 'text-gray-500', label: 'Full Name', sub: 'Ahmed Al-Mansouri' },
-              { icon: TbMailFilled, iconClass: 'text-gray-500', label: 'Email', sub: 'ahmed.almansouri@email.com' },
+              { icon: FaUser, iconClass: 'text-gray-500', label: 'Full Name', sub: fullName },
+              { icon: TbMailFilled, iconClass: 'text-gray-500', label: 'Email', sub: email },
               { icon: FaPhone, iconClass: 'text-gray-500', label: 'Phone Number', sub: '+974 5555 1234' },
               { icon: FaCakeCandles, iconClass: 'text-gray-500', label: 'Date of Birth', sub: 'March 15, 1990' },
               { icon: FaVenusMars, iconClass: 'text-gray-500', label: 'Gender', sub: 'Male' },
@@ -312,18 +337,39 @@ class Settings extends React.Component<SettingsProps> {
         <div className="bg-white p-6 border-b border-gray-100">
           <h3 className="text-2xl font-bold text-gray-900 mb-5">Account Actions</h3>
           <div className="space-y-5">
-            <button className="w-full text-left border border-orange-200 rounded-3xl hover:shadow-lg transition-shadow">
-              <SettingRow icon={FaRightFromBracket} iconClass="text-orange-500" label="Sign Out" sub="Log out from this device" bg="bg-orange-50" right={<button className="text-gray-400 text-3xl"><IconWrapper icon={FaAngleRight} /></button>} />
+
+            {/* CHANGED: Sign Out calls onLogout */}
+            <button
+              onClick={() => this.props.onLogout?.()}
+              className="w-full text-left border border-orange-200 rounded-3xl hover:shadow-lg transition-shadow"
+            >
+              <SettingRow
+                icon={FaRightFromBracket}
+                iconClass="text-orange-500"
+                label="Sign Out"
+                sub="Log out from this device"
+                bg="bg-orange-50"
+                right={<span className="text-gray-400 text-3xl"><IconWrapper icon={FaAngleRight} /></span>}
+              />
             </button>
+
+            {/* Delete Account stays the same */}
             <button className="w-full text-left border border-red-200 rounded-3xl hover:shadow-lg transition-shadow">
-              <SettingRow icon={FaUserSlash} iconClass="text-red-400" label="Delete Account" sub="Permanently remove your account" bg="bg-red-50" right={<button className="text-gray-400 text-3xl"><IconWrapper icon={FaAngleRight} /></button>} />
+              <SettingRow
+                icon={FaUserSlash}
+                iconClass="text-red-400"
+                label="Delete Account"
+                sub="Permanently remove your account"
+                bg="bg-red-50"
+                right={<span className="text-gray-400 text-3xl"><IconWrapper icon={FaAngleRight} /></span>}
+              />
             </button>
+
             <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
               <div className="flex gap-2 mb-1">
                 <span className="text-red-500 text-2xl">
                   <IconWrapper icon={FaTriangleExclamation} />
                 </span>
-
                 <div className="flex flex-col">
                   <p className="font-bold text-red-600 text-xl">Important Notice</p>
                   <p className="text-red-500 text-lg">
@@ -366,7 +412,20 @@ class Settings extends React.Component<SettingsProps> {
 
 function SettingsWithRouter() {
   const navigate = useNavigate();
-  return <Settings navigate={navigate} />;
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();           
+    navigate('/');
+  };
+
+  return (
+    <Settings
+      navigate={navigate}
+      user={user}
+      onLogout={handleLogout}
+    />
+  );
 }
 
 export default SettingsWithRouter;
