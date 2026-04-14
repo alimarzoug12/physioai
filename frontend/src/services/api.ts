@@ -43,11 +43,11 @@ export const api = {
   },
 
   // ── Google OAuth ──────────────────────────────────────────────
-  googleAuth: async (credential: string) => {
+  googleAuth: async (accessToken: string) => {
     const response = await fetch(`${API_URL}/auth/google`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential }),
+      body: JSON.stringify({ accessToken }),
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Server error' }));

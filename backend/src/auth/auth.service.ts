@@ -126,25 +126,21 @@ export class AuthService {
   }
 
   // ── Google ────────────────────────────────────────────────────────
-  async googleAuth(credential: string) {
-    try {
-      const ticket = await googleClient.verifyIdToken({
-        idToken: credential,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      });
+  async googleAuth(accessToken: string) {
+  try {
+    const response = await axios.get(
+      'https://www.googleapis.com/oauth2/v3/userinfo',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
 
-      const payload = ticket.getPayload();
-      if (!payload?.email) throw new UnauthorizedException('Invalid Google token');
+    const { email, name } = response.data;
+    if (!email) throw new UnauthorizedException('Invalid Google token');
 
-      return this.findOrCreateOAuthUser(
-        payload.email,
-        payload.name || payload.email,
-        'google',
-      );
-    } catch {
-      throw new UnauthorizedException('Google authentication failed');
-    }
+    return this.findOrCreateOAuthUser(email, name || email, 'google');
+  } catch {
+    throw new UnauthorizedException('Google authentication failed');
   }
+}
 
   // ── Facebook ──────────────────────────────────────────────────────
   async facebookAuth(accessToken: string) {

@@ -23,49 +23,78 @@ function OAuthButtons({ onError, onLoading }: OAuthButtonsProps) {
 
   // ── Google ────────────────────────────────────────────────────
   const handleGoogle = () => {
-    // Load Google Identity Services script if not already loaded
-    if (!(window as any).google) {
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.onload = () => initGoogle();
-      document.body.appendChild(script);
-    } else {
+  console.log('handleGoogle clicked');
+  console.log('window.google exists?', !!(window as any).google);
+
+  if (!(window as any).google) {
+    console.log('Loading Google script...');
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.onload = () => {
+      console.log('Google script loaded');
       initGoogle();
-    }
-  };
+    };
+    script.onerror = () => {
+      console.log('Google script FAILED to load');
+    };
+    document.body.appendChild(script);
+  } else {
+    console.log('Google already loaded, calling initGoogle');
+    initGoogle();
+  }
+};
 
   const initGoogle = () => {
-    (window as any).google.accounts.id.initialize({
-      client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID || '',
-      callback: async (response: any) => {
-        try {
-          onLoading(true);
-          const result = await api.googleAuth(response.credential);
-          login(result.token, result.user);
-          navigate('/dashboard');
-        } catch (err: any) {
-          onError(err.message || 'Google login failed');
-        } finally {
-          onLoading(false);
-        }
-      },
-    });
-    (window as any).google.accounts.id.prompt();
-  };
+  console.log('initGoogle called');
+
+  const client = (window as any).google.accounts.oauth2.initTokenClient({
+    client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID || '',
+    scope: 'email profile',
+    callback: async (tokenResponse: any) => {
+      console.log('Google token response:', tokenResponse);
+      if (tokenResponse.error) {
+        onError('Google login failed');
+        return;
+      }
+      try {
+        onLoading(true);
+        // get user info with the access token
+        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+        });
+        const userInfo = await userInfoRes.json();
+        console.log('Google user info:', userInfo);
+
+        // send access token to backend
+        const result = await api.googleAuth(tokenResponse.access_token);
+        login(result.token, result.user);
+        navigate('/dashboard');
+      } catch (err: any) {
+        onError(err.message || 'Google login failed');
+      } finally {
+        onLoading(false);
+      }
+    },
+  });
+
+  // this opens a real popup — works on localhost
+  client.requestAccessToken();
+};
 
   // ── Facebook ──────────────────────────────────────────────────
   const handleFacebook = () => {
-    // Load Facebook SDK if not already loaded
     if (!(window as any).FB) {
-      const script = document.createElement('script');
-      script.src = 'https://connect.facebook.net/en_US/sdk.js';
-      script.onload = () => {
+      (window as any).fbAsyncInit = () => {
         (window as any).FB.init({
-          appId: process.env.REACT_APP_FACEBOOK_APP_ID || '',
+          appId:   process.env.REACT_APP_FACEBOOK_APP_ID || '',
+          cookie:  true,
+          xfbml:   false,
           version: 'v18.0',
         });
         triggerFacebookLogin();
       };
+      const script = document.createElement('script');
+      script.src = 'https://connect.facebook.net/en_US/sdk.js';
       document.body.appendChild(script);
     } else {
       triggerFacebookLogin();
@@ -73,25 +102,33 @@ function OAuthButtons({ onError, onLoading }: OAuthButtonsProps) {
   };
 
   const triggerFacebookLogin = () => {
-    (window as any).FB.login(async (response: any) => {
-      if (response.authResponse) {
-        try {
-          onLoading(true);
-          const result = await api.facebookAuth(response.authResponse.accessToken);
-          login(result.token, result.user);
-          navigate('/dashboard');
-        } catch (err: any) {
-          onError(err.message || 'Facebook login failed');
-        } finally {
-          onLoading(false);
+    // ✅ plain function — NOT async
+    (window as any).FB.login(
+      function (response: any) {
+        if (response.authResponse) {
+          // async code inside a plain IIFE
+          (async () => {
+            try {
+              onLoading(true);
+              const result = await api.facebookAuth(response.authResponse.accessToken);
+              login(result.token, result.user);
+              navigate('/dashboard');
+            } catch (err: any) {
+              onError(err.message || 'Facebook login failed');
+            } finally {
+              onLoading(false);
+            }
+          })();
+        } else {
+          onError('Facebook login was cancelled');
         }
-      }
-    }, { scope: 'email,public_profile' });
+      },
+      { scope: 'email,public_profile' }
+    );
   };
 
   // ── Apple ─────────────────────────────────────────────────────
   const handleApple = () => {
-    // Load Apple JS if not already loaded
     if (!(window as any).AppleID) {
       const script = document.createElement('script');
       script.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
@@ -105,18 +142,16 @@ function OAuthButtons({ onError, onLoading }: OAuthButtonsProps) {
   const triggerAppleLogin = async () => {
     try {
       (window as any).AppleID.auth.init({
-        clientId: process.env.REACT_APP_APPLE_CLIENT_ID || '',
-        scope: 'name email',
+        clientId:    process.env.REACT_APP_APPLE_CLIENT_ID || '',
+        scope:       'name email',
         redirectURI: window.location.origin,
-        usePopup: true,
+        usePopup:    true,
       });
-
-      const response = await (window as any).AppleID.auth.signIn();
+      const response      = await (window as any).AppleID.auth.signIn();
       const identityToken = response.authorization.id_token;
-      const fullName = response.user
+      const fullName      = response.user
         ? `${response.user.name?.firstName || ''} ${response.user.name?.lastName || ''}`.trim()
         : undefined;
-
       onLoading(true);
       const result = await api.appleAuth(identityToken, fullName);
       login(result.token, result.user);
@@ -132,7 +167,6 @@ function OAuthButtons({ onError, onLoading }: OAuthButtonsProps) {
 
   return (
     <div className="space-y-4">
-      {/* Google */}
       <button
         onClick={handleGoogle}
         className="w-full h-20 flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-xl py-4 px-6 text-gray-800 font-medium hover:bg-gray-50 transition"
@@ -141,7 +175,6 @@ function OAuthButtons({ onError, onLoading }: OAuthButtonsProps) {
         <div className="text-gray-600 text-xl">Continue with Google</div>
       </button>
 
-      {/* Apple */}
       <button
         onClick={handleApple}
         className="w-full h-20 flex items-center justify-center gap-3 bg-black text-white rounded-xl py-4 px-6 font-medium hover:bg-gray-900 transition"
@@ -150,7 +183,6 @@ function OAuthButtons({ onError, onLoading }: OAuthButtonsProps) {
         <div className="text-gray-100 text-xl">Continue with Apple</div>
       </button>
 
-      {/* Facebook */}
       <button
         onClick={handleFacebook}
         className="w-full h-20 flex items-center justify-center gap-3 bg-blue-600 text-white rounded-xl py-4 px-6 font-medium hover:bg-blue-700 transition"
