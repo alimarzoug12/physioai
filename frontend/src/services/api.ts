@@ -83,4 +83,18 @@ export const api = {
     }
     return response.json();
   },
+
+  getDashboard: async (token: string) => {
+  const response = await fetch(`${API_URL}/dashboard/me`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Server error' }));
+    throw new Error(error.message || 'Failed to load dashboard');
+  }
+  return response.json();
+},
 };

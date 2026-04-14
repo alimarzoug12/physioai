@@ -1,58 +1,138 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaCalendarCheck, FaStar, FaHeartPulse, FaDumbbell, FaChartLine, FaTrophy, FaVideo, FaMessage, FaCalendar, FaClock, FaLocationDot, FaLightbulb, FaMoon, FaUserDoctor, FaPlus, FaWallet, FaRobot, FaCalendarPlus, FaCheck, FaPersonWalking, FaPhone, FaBed, FaGlassWater, FaComments, FaPills } from 'react-icons/fa6';
+import {
+  FaCalendarCheck, FaStar, FaHeartPulse, FaDumbbell, FaChartLine,
+  FaTrophy, FaVideo, FaMessage, FaCalendar, FaClock, FaLocationDot,
+  FaLightbulb, FaMoon, FaUserDoctor, FaPlus, FaWallet, FaRobot,
+  FaCalendarPlus, FaCheck, FaPersonWalking, FaPhone, FaBed,
+  FaGlassWater, FaComments, FaPills,
+} from 'react-icons/fa6';
 import { IoIosWater, IoMdNotifications, IoMdSettings } from 'react-icons/io';
 import { BsChatFill } from 'react-icons/bs';
 import { FaHistory } from 'react-icons/fa';
-// ONLY ADDITION: import useAuth
 import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
 
-const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => {
-  return <Icon className={className} />;
-};
+const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => (
+  <Icon className={className} />
+);
 
-// ONLY ADDITION: added user prop to receive data from AuthContext
-interface PatientDashboardProps {
-  navigate?: (path: string) => void;
-  user?: {
+interface DashboardData {
+  stats: {
+    totalSessions: number;
+    completedSessions: number;
+    pendingSessions: number;
+    recoveryRate: number;
+  };
+  bookings: Array<{
     id: string;
-    email: string;
-    fullName: string;
-    role: string;
-  } | null;
+    status: string;
+    sessionType: string;
+    notes?: string;
+    createdAt: string;
+    slot: { date: string; startTime: string; endTime: string };
+    doctor: {
+      id: string;
+      fullName: string;
+      specialties: string[];
+      rating: number;
+      center: string;
+      avatarUrl: string;
+    };
+  }>;
+  recentActivity: Array<{
+    id: string;
+    status: string;
+    createdAt: string;
+    doctorName: string;
+    specialty: string;
+    slot: { date: string; startTime: string };
+  }>;
 }
 
-// helper: get first name from full name
-function getFirstName(fullName?: string): string {
+interface PatientDashboardProps {
+  navigate?: (path: string) => void;
+  user?: { id: string; email: string; fullName: string; role: string } | null;
+  token?: string | null;
+}
+
+interface State {
+  data: DashboardData | null;
+  loading: boolean;
+  error: string;
+}
+
+function getFirstName(fullName?: string) {
   if (!fullName) return 'there';
   return fullName.split(' ')[0];
 }
 
-// helper: get greeting based on time of day
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good Morning';
-  if (hour < 18) return 'Good Afternoon';
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good Morning';
+  if (h < 18) return 'Good Afternoon';
   return 'Good Evening';
 }
 
-// helper: generate avatar initials fallback URL
-function getAvatarUrl(fullName?: string): string {
-  const initials = fullName
-    ? fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    : 'U';
+function getAvatarUrl(fullName?: string) {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName || 'User')}&background=3b82f6&color=fff&size=128`;
 }
 
-class PatientDashboard extends React.Component<PatientDashboardProps> {
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
+}
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return 'Just now';
+  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Yesterday';
+  return `${days} days ago`;
+}
+
+// ── Status badge color ────────────────────────────────────────────
+function statusColor(status: string) {
+  switch (status) {
+    case 'CONFIRMED': return 'text-green-600';
+    case 'PENDING': return 'text-orange-500';
+    case 'COMPLETED': return 'text-blue-500';
+    case 'CANCELLED': return 'text-red-500';
+    default: return 'text-gray-500';
+  }
+}
+
+class PatientDashboard extends React.Component<PatientDashboardProps, State> {
+  state: State = { data: null, loading: true, error: '' };
+
+  async componentDidMount() {
+    const { token } = this.props;
+    if (!token) { this.setState({ loading: false }); return; }
+    try {
+      const data = await api.getDashboard(token);
+      this.setState({ data, loading: false });
+    } catch (err: any) {
+      this.setState({ error: err.message, loading: false });
+    }
+  }
+
   render() {
-    // ONLY ADDITION: use real user data if available, fall back to static
     const { user } = this.props;
-    const firstName  = getFirstName(user?.fullName);
-    const greeting   = getGreeting();
-    const avatarUrl  = getAvatarUrl(user?.fullName);
-    const fullName   = user?.fullName || 'Ahmed';
-    const userEmail  = user?.email || '';
+    const { data, loading, error } = this.state;
+
+    const firstName = getFirstName(user?.fullName);
+    const greeting = getGreeting();
+    const avatarUrl = getAvatarUrl(user?.fullName);
+    const fullName = user?.fullName || 'User';
+
+    // use real stats or fall back to zeros while loading
+    const stats = data?.stats ?? {
+      totalSessions: 0, completedSessions: 0,
+      pendingSessions: 0, recoveryRate: 0,
+    };
 
     return (
       <div className="min-h-screen bg-gray-50 pb-24">
@@ -60,14 +140,9 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
         {/* Header */}
         <header className="bg-white border-b border-gray-100 p-6 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-4">
-            {/* ONLY CHANGE: replaced static img src with dynamic avatarUrl */}
-            <img
-              src={avatarUrl}
-              alt={fullName}
-              className="w-16 h-16 rounded-full object-cover"
-            />
+            <img src={avatarUrl} alt={fullName}
+              className="w-16 h-16 rounded-full object-cover" />
             <div>
-              {/* ONLY CHANGE: replaced "Ahmed" with real firstName and dynamic greeting */}
               <h2 className="text-2xl font-bold text-gray-900">{greeting}, {firstName}</h2>
               <p className="text-xl text-gray-500 flex items-center gap-2">
                 <span className="w-3 h-3 bg-green-500 rounded-full inline-block"></span>
@@ -76,17 +151,11 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
             </div>
           </div>
           <div className="flex items-center gap-6">
-            <button
-              className="relative"
-              onClick={() => this.props.navigate?.('/notifications')}
-            >
+            <button className="relative" onClick={() => this.props.navigate?.('/notifications')}>
               <span className="text-3xl text-gray-600"><IconWrapper icon={IoMdNotifications} /></span>
               <span className="absolute -top-4 -right-4 bg-red-500 text-white border-2 border-white text-lg rounded-full w-7 h-7 flex items-center justify-center">3</span>
             </button>
-            <button
-              className="text-3xl text-gray-600"
-              onClick={() => this.props.navigate?.('/settings')}
-            >
+            <button className="text-3xl text-gray-600" onClick={() => this.props.navigate?.('/settings')}>
               <IconWrapper icon={IoMdSettings} />
             </button>
           </div>
@@ -97,44 +166,45 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
           <div className="absolute right-6 top-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-white/10 flex items-center justify-center">
             <span className="text-white text-3xl"><IconWrapper icon={FaHeartPulse} /></span>
           </div>
-          {/* ONLY CHANGE: dynamic first name in welcome message */}
           <h1 className="text-4xl font-bold mb-3">Welcome back, {firstName}! 👋</h1>
           <p className="text-white/80 text-xl mb-4">Your health journey continues with personalized care</p>
           <div className="flex items-center gap-6 text-xl">
             <div className="flex items-center gap-2">
               <span className="text-white"><IconWrapper icon={FaCalendarCheck} /></span>
-              <span className="font-medium">2 Sessions Completed</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-yellow-300"><IconWrapper icon={FaStar} /></span>
-              <span className="font-medium">4.9 Rating</span>
+              <span className="font-medium">{stats.completedSessions} Sessions Completed</span>
             </div>
           </div>
         </div>
 
         {/* Stats Row */}
         <div className="bg-white mx-4 -mt-10 rounded-2xl shadow-xl border border-gray-100 grid grid-cols-3 divide-x divide-gray-100 relative z-10">
-          <div className="flex flex-col items-center py-5 gap-2">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-blue-500 text-3xl">
-              <span className=""><IconWrapper icon={FaDumbbell} /></span>
-            </div>
-            <div className="text-3xl font-bold text-gray-900">12</div>
-            <div className="text-xl text-gray-500">Total Sessions</div>
-          </div>
-          <div className="flex flex-col items-center justify-center py-5 gap-2">
-            <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-gray-600 text-2xl">
-              <span className=""><IconWrapper icon={FaChartLine} /></span>
-            </div>
-            <div className="text-3xl font-bold text-gray-900">85%</div>
-            <div className="text-xl text-gray-500">Recovery Rate</div>
-          </div>
-          <div className="flex flex-col items-center py-5 gap-2">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center text-purple-500 text-3xl">
-              <span className=""><IconWrapper icon={FaTrophy} /></span>
-            </div>
-            <div className="text-3xl font-bold text-gray-900">7</div>
-            <div className="text-xl text-gray-500">Achievements</div>
-          </div>
+          {loading ? (
+            <div className="col-span-3 py-8 text-center text-gray-400 text-xl">Loading...</div>
+          ) : (
+            <>
+              <div className="flex flex-col items-center py-5 gap-2">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-blue-500 text-3xl">
+                  <IconWrapper icon={FaDumbbell} />
+                </div>
+                <div className="text-3xl font-bold text-gray-900">{stats.totalSessions}</div>
+                <div className="text-xl text-gray-500">Total Sessions</div>
+              </div>
+              <div className="flex flex-col items-center justify-center py-5 gap-2">
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-gray-600 text-2xl">
+                  <IconWrapper icon={FaChartLine} />
+                </div>
+                <div className="text-3xl font-bold text-gray-900">{stats.recoveryRate}%</div>
+                <div className="text-xl text-gray-500">Completion Rate</div>
+              </div>
+              <div className="flex flex-col items-center py-5 gap-2">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center text-purple-500 text-3xl">
+                  <IconWrapper icon={FaTrophy} />
+                </div>
+                <div className="text-3xl font-bold text-gray-900">{stats.completedSessions}</div>
+                <div className="text-xl text-gray-500">Completed</div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Ongoing Sessions */}
@@ -144,90 +214,89 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
             <button className="text-blue-500 text-xl">View All</button>
           </div>
 
-          <div className="space-y-4">
-            {/* Active Session */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
-              <div className="flex items-center justify-between mb-4">
+          {loading && (
+            <div className="bg-white rounded-2xl p-8 text-center text-gray-400 text-xl">
+              Loading sessions...
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-red-500 text-xl text-center">
+              {error}
+            </div>
+          )}
+
+          {!loading && !error && data?.bookings.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+              <IconWrapper icon={FaCalendarCheck} className="text-gray-300 text-5xl mx-auto mb-3" />
+              <p className="text-gray-500 text-xl">No ongoing sessions</p>
+              <button
+                onClick={() => this.props.navigate?.('/book')}
+                className="mt-4 bg-blue-500 text-white px-6 py-3 rounded-xl text-xl font-medium"
+              >
+                Book a Session
+              </button>
+            </div>
+          )}
+
+          {!loading && data?.bookings.map(booking => (
+            <div key={booking.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 mb-4">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <img
-                    src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80"
-                    alt="Dr. Sarah"
+                    src={booking.doctor.avatarUrl}
+                    alt={booking.doctor.fullName}
                     className="w-16 h-16 rounded-full object-cover"
                   />
                   <div>
-                    <h4 className="text-2xl font-semibold text-gray-900">Dr. Sarah Al-Rashid</h4>
-                    <p className="text-xl font-semibold text-gray-500">Musculoskeletal Specialist</p>
+                    <h4 className="text-2xl font-semibold text-gray-900">
+                      Dr. {booking.doctor.fullName}
+                    </h4>
+                    <p className="text-xl font-semibold text-gray-500">
+                      {booking.doctor.specialties[0]}
+                    </p>
+                    <p className="text-lg text-gray-400">{booking.doctor.center}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-green-600 text-xl font-medium">
-                  <span className="w-3 h-3 rounded-full animate-[colorCycle_2s_ease-in-out_infinite]"></span> Active
+                <div className={`flex items-center gap-2 text-xl font-medium ${statusColor(booking.status)}`}>
+                  <span className="w-3 h-3 rounded-full bg-current"></span>
+                  {booking.status}
                 </div>
               </div>
 
-              <div className="bg-gradient-to-r from-blue-50 to-white rounded-xl p-4 mb-3 space-y-3">
-                <div className="flex justify-between mb-2">
-                  <span className="text-xl font-semibold text-gray-800">Lower Back Recovery</span>
-                  <span className="text-xl font-bold text-blue-500">Session 3/6</span>
+              <div className="bg-gradient-to-r from-blue-50 to-white rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-4 text-lg text-gray-600">
+                  <span className="flex items-center gap-1">
+                    <IconWrapper icon={FaCalendar} className="text-gray-400" />
+                    {formatDate(booking.slot.date)}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <IconWrapper icon={FaClock} className="text-gray-400" />
+                    {booking.slot.startTime}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <IconWrapper icon={FaLocationDot} className="text-gray-400" />
+                    {booking.sessionType === 'HOME_VISIT' ? 'Home Visit' : 'Clinic'}
+                  </span>
                 </div>
-                <div className="bg-gray-200 rounded-full h-3 overflow-hidden">
-                  <div className="bg-gradient-to-r from-blue-500 to-green-400 h-full w-[50%]"></div>
-                </div>
-                <div className="flex justify-between text-lg text-gray-500 mt-1">
-                  <span>Progress: 50%</span>
-                  <span>Next: Tomorrow 2:00 PM</span>
-                </div>
+                {booking.notes && (
+                  <p className="text-lg text-gray-500 italic">"{booking.notes}"</p>
+                )}
               </div>
 
               <div className="flex gap-3">
-                <button className="flex-1 bg-gradient-to-r from-blue-500 to-white text-white py-3 rounded-xl font-medium flex items-center justify-center gap-3 text-xl shadow-[0_0_28px_rgba(0,0,0,0.1)] shadow-blue-200 transition">
-                  <span className="text-2xl"><IconWrapper icon={FaVideo} /></span> Join Session
+                <button className="flex-1 bg-gradient-to-r from-blue-500 to-blue-300 text-white py-3 rounded-xl font-medium flex items-center justify-center gap-3 text-xl shadow-sm">
+                  <IconWrapper icon={FaVideo} /> Join Session
                 </button>
-                <button className="w-12 h-12 bg-white border border-gray-200 px-8 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-50 transition">
-                  <span className="text-xl"><IconWrapper icon={FaMessage} /></span>
+                <button className="w-14 h-14 bg-white border border-gray-200 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-50">
+                  <IconWrapper icon={FaMessage} />
                 </button>
-                <button className="w-12 h-12 bg-white border border-gray-200 px-8 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-50 transition">
-                  <span className="text-xl"><IconWrapper icon={FaCalendar} /></span>
+                <button className="w-14 h-14 bg-white border border-gray-200 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-50">
+                  <IconWrapper icon={FaCalendar} />
                 </button>
               </div>
             </div>
-
-            {/* Scheduled Session */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <img
-                    src="https://randomuser.me/api/portraits/women/44.jpg"
-                    alt="Dr. Amina"
-                    className="w-16 h-16 rounded-full object-cover"
-                  />
-                  <div>
-                    <h4 className="text-2xl font-semibold text-gray-900">Dr. Amina Hassan</h4>
-                    <p className="text-xl font-semibold text-gray-500">Sports Rehabilitation</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 text-orange-500 text-xl font-medium">
-                  <span className="w-3 h-3 bg-orange-400 rounded-full"></span> Scheduled
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl p-4 mb-3">
-                <div className="flex justify-between mb-1">
-                  <span className="text-2xl font-semibold text-gray-800">Shoulder Mobility</span>
-                  <span className="text-xl font-semibold text-orange-500">Initial Assessment</span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-lg text-gray-700 mt-2">
-                  <span className="flex items-center gap-1"><IconWrapper icon={FaCalendar} className="text-gray-400" /> Dec 15, 2024</span>
-                  <span className="flex items-center gap-1"><IconWrapper icon={FaClock} className="text-gray-400" /> 10:00 AM</span>
-                  <span className="flex items-center gap-1"><IconWrapper icon={FaLocationDot} className="text-gray-400" /> Home Visit</span>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <button className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-medium text-xl hover:bg-gray-200">Reschedule</button>
-                <button className="flex-1 border border-orange-400 text-orange-500 py-3 rounded-xl font-medium text-xl hover:bg-orange-50">View Details</button>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* AI Health Tips */}
@@ -294,11 +363,8 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
               { icon: FaHistory, bg: 'bg-gradient-to-br from-purple-100 to-purple-200', color: 'text-purple-500', label: 'Health History', sub: 'View past sessions', path: '/sessions' },
               { icon: FaWallet, bg: 'bg-gradient-to-br from-orange-100 to-orange-200', color: 'text-orange-500', label: 'Wallet', sub: 'Manage payments', path: '/wallet' },
             ].map(({ icon, bg, color, label, sub, path }) => (
-              <button
-                key={label}
-                onClick={() => this.props.navigate?.(path)}
-                className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center gap-3 hover:shadow-md transition text-left"
-              >
+              <button key={label} onClick={() => this.props.navigate?.(path)}
+                className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center gap-3 hover:shadow-md transition text-left">
                 <div className={`w-16 h-16 ${bg} rounded-full flex items-center justify-center text-xl ${color}`}>
                   <span className="text-2xl"><IconWrapper icon={icon} /></span>
                 </div>
@@ -312,23 +378,21 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
         </div>
 
         {/* AI Assistant Banner */}
-        <div className="mx-6 bg-gradient-to-r from-blue-500 to-blue-20 rounded-2xl p-6 text-white relative overflow-hidden">
+        <div className="mx-6 bg-gradient-to-r from-blue-500 to-blue-200 rounded-2xl p-6 text-white relative overflow-hidden">
           <div className="absolute right-8 top-1/2 -translate-y-1/2 opacity-10 text-6xl text-white bg-white/70 rounded-full w-24 h-24 flex items-center justify-center">
             <IconWrapper icon={FaComments} />
           </div>
           <div className="flex items-center gap-2 mb-2">
             <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-              <span className="text-2xl"><IconWrapper icon={FaRobot} className="text-white" /></span>
+              <IconWrapper icon={FaRobot} className="text-white text-2xl" />
             </div>
             <span className="font-medium text-2xl">AI Assistant</span>
           </div>
           <h4 className="font-bold text-2xl mb-1">Need Help?</h4>
           <p className="text-white/80 text-xl mb-4">Ask me about symptoms, exercises, or book a session</p>
-          <button
-            onClick={() => this.props.navigate?.('/ai-assistant')}
-            className="bg-white text-blue-500 font-semibold text-xl px-4 py-3 rounded-xl flex items-center gap-3"
-          >
-            <span className=""><IconWrapper icon={BsChatFill} /></span> Start Chat
+          <button onClick={() => this.props.navigate?.('/ai-assistant')}
+            className="bg-white text-blue-500 font-semibold text-xl px-4 py-3 rounded-xl flex items-center gap-3">
+            <IconWrapper icon={BsChatFill} /> Start Chat
           </button>
         </div>
 
@@ -376,57 +440,52 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
           </div>
         </div>
 
-        {/* Recent Activity */}
+        {/* Recent Activity — from DB */}
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-2xl font-bold text-gray-900">Recent Activity</h3>
             <button className="text-blue-500 text-xl">View All</button>
           </div>
+
+          {!loading && data?.recentActivity.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-400 text-xl">
+              No activity yet
+            </div>
+          )}
+
           <div className="space-y-3">
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-green-100 to-green-200 rounded-full flex items-center justify-center text-green-500 flex-shrink-0">
-                <span className="text-2xl"><IconWrapper icon={FaCheck} /></span>
-              </div>
-              <div className="flex-1">
-                <div className="font-medium text-gray-900 text-2xl">Session Completed</div>
-                <div className="text-xl text-gray-500">Lower back therapy with Dr. Sarah</div>
-              </div>
-              <div className="text-right">
-                <div className="text-lg text-gray-400">2 hours ago</div>
-                <div className="flex items-center gap-1 mt-1 justify-end">
-                  <span className="text-yellow-400 text-lg"><IconWrapper icon={FaStar} /></span>
-                  <span className="text-lg text-gray-600">4.9</span>
+            {data?.recentActivity.map(activity => (
+              <div key={activity.id} className="bg-white rounded-2xl border border-gray-100 p-6 flex items-center gap-4">
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${activity.status === 'COMPLETED'
+                    ? 'bg-gradient-to-br from-green-100 to-green-200 text-green-500'
+                    : activity.status === 'CONFIRMED'
+                      ? 'bg-gradient-to-br from-blue-100 to-blue-200 text-blue-500'
+                      : 'bg-gradient-to-br from-orange-100 to-orange-200 text-orange-500'
+                  }`}>
+                  <span className="text-2xl">
+                    <IconWrapper icon={
+                      activity.status === 'COMPLETED' ? FaCheck :
+                        activity.status === 'CONFIRMED' ? FaCalendarPlus : FaClock
+                    } />
+                  </span>
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900 text-2xl">
+                    {activity.status === 'COMPLETED' ? 'Session Completed' :
+                      activity.status === 'CONFIRMED' ? 'Appointment Confirmed' : 'Appointment Pending'}
+                  </div>
+                  <div className="text-xl text-gray-500">
+                    {activity.specialty} with Dr. {activity.doctorName}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg text-gray-400">{timeAgo(activity.createdAt)}</div>
+                  <div className={`text-lg mt-1 ${statusColor(activity.status)}`}>
+                    {activity.status}
+                  </div>
                 </div>
               </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center text-blue-500 flex-shrink-0">
-                <span className="text-2xl"><IconWrapper icon={FaCalendarPlus} /></span>
-              </div>
-              <div className="flex-1">
-                <div className="font-medium text-gray-900 text-2xl">New Appointment Booked</div>
-                <div className="text-xl text-gray-500">Shoulder therapy with Dr. Amina</div>
-              </div>
-              <div className="text-right">
-                <div className="text-lg text-gray-400">Yesterday</div>
-                <div className="text-lg text-orange-500 mt-1">Dec 15, 10:00 AM</div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 flex items-center gap-4">
-              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-gray-700 flex-shrink-0">
-                <span className="text-3xl"><IconWrapper icon={FaRobot} /></span>
-              </div>
-              <div className="flex-1">
-                <div className="font-medium text-gray-900 text-2xl">AI Health Assessment</div>
-                <div className="text-xl text-gray-500">Progress evaluation completed</div>
-              </div>
-              <div className="text-right">
-                <div className="text-lg text-gray-400">2 days ago</div>
-                <div className="text-lg text-green-500 mt-1">85% Progress</div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -531,11 +590,11 @@ class PatientDashboard extends React.Component<PatientDashboardProps> {
   }
 }
 
-// ONLY CHANGE: pass real user from AuthContext into the dashboard
+// ── Router wrapper ────────────────────────────────────────────────
 function PatientDashboardWithRouter() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  return <PatientDashboard navigate={navigate} user={user} />;
+  const { user, token } = useAuth();
+  return <PatientDashboard navigate={navigate} user={user} token={token} />;
 }
 
 export default PatientDashboardWithRouter;
