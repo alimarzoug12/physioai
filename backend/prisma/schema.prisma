@@ -20,6 +20,8 @@ model User {
   bookings     Booking[]
   doctor       Doctor?
   healthProfile HealthProfile?
+  healthInsights HealthInsight[]
+  reminders      Reminder[]
 }
 
 enum Role {
@@ -119,4 +121,38 @@ model HealthProfile {
   updatedAt      DateTime @updatedAt
 
   user           User     @relation(fields: [userId], references: [id])
+}
+
+model HealthInsight {
+  id        String   @id @default(uuid())
+  userId    String
+  heartRate Int?
+  dailySteps Int?
+  exerciseSessions Int @default(0)
+  totalSessions    Int @default(0)
+  painLevel Float?
+  sleepQuality Float?
+  week      DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Reminder {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      ReminderType @default(SESSION)
+  time      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+enum ReminderType {
+  SESSION
+  EXERCISE
+  MEDICATION
 }

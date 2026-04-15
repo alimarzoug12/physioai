@@ -85,7 +85,7 @@ export const api = {
   },
 
   getDashboard: async (token: string) => {
-  const response = await fetch(`${API_URL}/dashboard/me`, {
+  const response = await fetch(`${API_URL}/dashboard`, {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,

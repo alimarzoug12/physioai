@@ -48,6 +48,29 @@ interface DashboardData {
     specialty: string;
     slot: { date: string; startTime: string };
   }>;
+  healthInsight: {
+    heartRate: number | null;
+    dailySteps: number | null;
+    exerciseSessions: number;
+    totalSessions: number;
+    painLevel: number | null;
+    sleepQuality: number | null;
+  } | null;
+
+  reminders: Array<{
+    id: string;
+    title: string;
+    message: string;
+    type: string;
+    time: string | null;
+  }>;
+
+  progress: {
+    painReduction: number;
+    mobilityImprovement: number;
+    exerciseCompliance: number;
+    weeksInTreatment: number;
+  };
 }
 
 interface PatientDashboardProps {
@@ -406,19 +429,36 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
             <div className="flex justify-between items-start mb-1">
               <div>
                 <div className="font-semibold text-2xl text-gray-900">Recovery Journey</div>
-                <div className="font-medium text-xl text-gray-500">Lower Back Treatment</div>
+                <div className="font-medium text-xl text-gray-500">Treatment Progress</div>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-green-400 bg-clip-text text-transparent">85%</div>
-                <div className="text-lg text-gray-400">Improvement</div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-green-400 bg-clip-text text-transparent">
+                  {stats.recoveryRate}%
+                </div>
+                <div className="text-lg text-gray-400">Completion Rate</div>
               </div>
             </div>
 
             <div className="space-y-4 mt-4">
               {[
-                { label: 'Pain Level Reduction', pct: '90%', color: 'bg-gradient-to-r from-green-400 to-green-500', val: '90%' },
-                { label: 'Mobility Improvement', pct: '75%', color: 'bg-gradient-to-r from-blue-400 to-blue-500', val: '75%' },
-                { label: 'Exercise Compliance', pct: '95%', color: 'bg-gradient-to-r from-purple-400 to-purple-500', val: '95%' },
+                {
+                  label: 'Pain Level Reduction',
+                  pct: `${data?.progress.painReduction ?? 0}%`,
+                  color: 'bg-gradient-to-r from-green-400 to-green-500',
+                  val: `${data?.progress.painReduction ?? 0}%`,
+                },
+                {
+                  label: 'Mobility Improvement',
+                  pct: `${data?.progress.mobilityImprovement ?? 0}%`,
+                  color: 'bg-gradient-to-r from-blue-400 to-blue-500',
+                  val: `${data?.progress.mobilityImprovement ?? 0}%`,
+                },
+                {
+                  label: 'Exercise Compliance',
+                  pct: `${data?.progress.exerciseCompliance ?? 0}%`,
+                  color: 'bg-gradient-to-r from-purple-400 to-purple-500',
+                  val: `${data?.progress.exerciseCompliance ?? 0}%`,
+                },
               ].map(({ label, pct, color, val }) => (
                 <div key={label}>
                   <div className="flex justify-between text-xl mb-2">
@@ -433,9 +473,18 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
             </div>
 
             <div className="grid grid-cols-3 gap-4 text-center border-t border-gray-100 mt-5 pt-5">
-              <div><div className="text-3xl font-bold text-gray-900">12</div><div className="text-xl text-gray-500">Sessions</div></div>
-              <div><div className="text-3xl font-bold text-gray-900">8.2</div><div className="text-xl text-gray-500">Avg Rating</div></div>
-              <div><div className="text-3xl font-bold text-gray-900">4</div><div className="text-xl text-gray-500">Weeks</div></div>
+              <div>
+                <div className="text-3xl font-bold text-gray-900">{stats.totalSessions}</div>
+                <div className="text-xl text-gray-500">Sessions</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-gray-900">{stats.completedSessions}</div>
+                <div className="text-xl text-gray-500">Completed</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-gray-900">{data?.progress.weeksInTreatment ?? 0}</div>
+                <div className="text-xl text-gray-500">Weeks</div>
+              </div>
             </div>
           </div>
         </div>
@@ -457,10 +506,10 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
             {data?.recentActivity.map(activity => (
               <div key={activity.id} className="bg-white rounded-2xl border border-gray-100 p-6 flex items-center gap-4">
                 <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${activity.status === 'COMPLETED'
-                    ? 'bg-gradient-to-br from-green-100 to-green-200 text-green-500'
-                    : activity.status === 'CONFIRMED'
-                      ? 'bg-gradient-to-br from-blue-100 to-blue-200 text-blue-500'
-                      : 'bg-gradient-to-br from-orange-100 to-orange-200 text-orange-500'
+                  ? 'bg-gradient-to-br from-green-100 to-green-200 text-green-500'
+                  : activity.status === 'CONFIRMED'
+                    ? 'bg-gradient-to-br from-blue-100 to-blue-200 text-blue-500'
+                    : 'bg-gradient-to-br from-orange-100 to-orange-200 text-orange-500'
                   }`}>
                   <span className="text-2xl">
                     <IconWrapper icon={
@@ -495,39 +544,52 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
             <h3 className="text-2xl font-bold text-gray-900">Upcoming Reminders</h3>
             <button className="text-blue-500 text-xl">Manage</button>
           </div>
+
+          {!loading && data?.reminders.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-400 text-xl">
+              No reminders yet
+            </div>
+          )}
+
           <div className="space-y-3">
-            <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-2xl border border-orange-100 p-6 flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-300 rounded-full flex items-center justify-center text-white text-xl flex-shrink-0">
-                <span className="text-3xl"><IconWrapper icon={IoMdNotifications} /></span>
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold text-gray-900 text-xl">Session Reminder</div>
-                <div className="text-xl text-gray-500">Shoulder therapy tomorrow at 10:00 AM</div>
-              </div>
-              <button className="text-orange-500 text-xl font-medium">Snooze</button>
-            </div>
+            {data?.reminders.map(reminder => {
+              const isSession = reminder.type === 'SESSION';
+              const isExercise = reminder.type === 'EXERCISE';
+              const isMedication = reminder.type === 'MEDICATION';
 
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-200 rounded-full flex items-center justify-center text-white text-xl flex-shrink-0">
-                <span className="text-3xl"><IconWrapper icon={FaDumbbell} /></span>
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold text-gray-900 text-xl">Exercise Time</div>
-                <div className="text-xl text-gray-500">Daily stretching routine in 30 minutes</div>
-              </div>
-              <button className="text-blue-500 text-xl font-medium">Start</button>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-300 rounded-full flex items-center justify-center text-white text-xl flex-shrink-0">
-                <span className="text-3xl"><IconWrapper icon={FaPills} /></span>
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold text-gray-900 text-xl">Medication Time</div>
-                <div className="text-xl text-gray-500">Take prescribed supplements</div>
-              </div>
-              <button className="text-green-600 text-xl font-medium">Done</button>
-            </div>
+              return (
+                <div key={reminder.id} className={`rounded-2xl border p-6 flex items-center gap-4 ${isSession ? 'bg-gradient-to-r from-orange-50 to-yellow-50 border-orange-100' :
+                    isExercise ? 'bg-white border-gray-100' :
+                      'bg-white border-gray-100'
+                  }`}>
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl flex-shrink-0 ${isSession ? 'bg-gradient-to-br from-orange-400 to-orange-300' :
+                      isExercise ? 'bg-gradient-to-br from-blue-400 to-blue-200' :
+                        'bg-gradient-to-br from-green-400 to-green-300'
+                    }`}>
+                    <span className="text-3xl">
+                      <IconWrapper icon={
+                        isSession ? IoMdNotifications :
+                          isExercise ? FaDumbbell :
+                            FaPills
+                      } />
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-gray-900 text-xl">{reminder.title}</div>
+                    <div className="text-xl text-gray-500">{reminder.message}</div>
+                    {reminder.time && (
+                      <div className="text-lg text-gray-400 mt-1">{reminder.time}</div>
+                    )}
+                  </div>
+                  <button className={`text-xl font-medium ${isSession ? 'text-orange-500' :
+                      isExercise ? 'text-blue-500' :
+                        'text-green-600'
+                    }`}>
+                    {isSession ? 'Snooze' : isExercise ? 'Start' : 'Done'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -541,12 +603,16 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
             <div className="grid grid-cols-2 gap-4 mb-5 border-b border-gray-100 pb-6">
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-4 flex flex-col items-center">
                 <span className="text-blue-500 text-3xl mb-2"><IconWrapper icon={FaHeartPulse} /></span>
-                <div className="text-4xl font-bold text-gray-900">72</div>
+                <div className="text-4xl font-bold text-gray-900">
+                  {data?.healthInsight?.heartRate ?? '--'}
+                </div>
                 <div className="text-lg text-gray-500">Avg Heart Rate</div>
               </div>
               <div className="flex flex-col items-center justify-center">
                 <span className="text-gray-800 text-3xl mb-2"><IconWrapper icon={FaPersonWalking} /></span>
-                <div className="text-4xl font-bold text-gray-900">8,547</div>
+                <div className="text-4xl font-bold text-gray-900">
+                  {data?.healthInsight?.dailySteps?.toLocaleString() ?? '--'}
+                </div>
                 <div className="text-lg text-gray-500">Daily Steps</div>
               </div>
             </div>
@@ -554,16 +620,30 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
             <div>
               <h4 className="font-medium text-2xl text-gray-900 mb-3">Weekly Summary</h4>
               <div className="space-y-3">
-                {[
-                  { label: 'Exercise Sessions', val: '5/5 ✓', color: 'text-green-500' },
-                  { label: 'Pain Level (Avg)', val: '2.1/10', color: 'text-blue-500' },
-                  { label: 'Sleep Quality', val: '8.3/10', color: 'text-purple-500' },
-                ].map(({ label, val, color }) => (
-                  <div key={label} className="flex justify-between text-xl">
-                    <span className="text-gray-600">{label}</span>
-                    <span className={`font-medium ${color}`}>{val}</span>
-                  </div>
-                ))}
+                <div className="flex justify-between text-xl">
+                  <span className="text-gray-600">Exercise Sessions</span>
+                  <span className="font-medium text-green-500">
+                    {data?.healthInsight
+                      ? `${data.healthInsight.exerciseSessions}/${data.healthInsight.totalSessions} ✓`
+                      : '--'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xl">
+                  <span className="text-gray-600">Pain Level (Avg)</span>
+                  <span className="font-medium text-blue-500">
+                    {data?.healthInsight?.painLevel != null
+                      ? `${data.healthInsight.painLevel}/10`
+                      : '--'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xl">
+                  <span className="text-gray-600">Sleep Quality</span>
+                  <span className="font-medium text-purple-500">
+                    {data?.healthInsight?.sleepQuality != null
+                      ? `${data.healthInsight.sleepQuality}/10`
+                      : '--'}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
