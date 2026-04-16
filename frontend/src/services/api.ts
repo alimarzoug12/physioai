@@ -85,16 +85,49 @@ export const api = {
   },
 
   getDashboard: async (token: string) => {
-  const response = await fetch(`${API_URL}/dashboard`, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Server error' }));
-    throw new Error(error.message || 'Failed to load dashboard');
-  }
-  return response.json();
-},
+    const response = await fetch(`${API_URL}/dashboard`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Server error' }));
+      throw new Error(error.message || 'Failed to load dashboard');
+    }
+    return response.json();
+  },
+  getSessions: async (token: string) => {
+    const response = await fetch(`${API_URL}/sessions`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Server error' }));
+      throw new Error(error.message || 'Failed to load sessions');
+    }
+    return response.json();
+  },
+  getNotifications: async (token: string) => {
+    const response = await fetch(`${API_URL}/notifications`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Server error' }));
+      throw new Error(error.message || 'Failed to load notifications');
+    }
+    return response.json();
+  },
+  getDoctors: async () => {
+    const response = await fetch(`${API_URL}/doctors`);
+    if (!response.ok) { const error = await response.json().catch(() => ({ message: 'Server error' })); throw new Error(error.message || 'Failed to load doctors'); }
+    return response.json();
+  },
 };
