@@ -1,5 +1,6 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards, Get } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -50,5 +51,10 @@ export class AuthController {
   @Post('apple')
   appleAuth(@Body() body: { identityToken: string; fullName?: string }) {
     return this.authService.appleAuth(body.identityToken, body.fullName);
+  }
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  getMe(@Req() req: any) {
+    return this.authService.getMe(req.user.userId);
   }
 }

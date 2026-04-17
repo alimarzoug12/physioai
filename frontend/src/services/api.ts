@@ -130,4 +130,90 @@ export const api = {
     if (!response.ok) { const error = await response.json().catch(() => ({ message: 'Server error' })); throw new Error(error.message || 'Failed to load doctors'); }
     return response.json();
   },
+  getDoctorById: async (id: string) => {
+    const response = await fetch(`${API_URL}/doctors/${id}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Server error' }));
+      throw new Error(error.message || 'Failed to load doctor');
+    }
+    return response.json();
+  },
+
+  getWallet: async (token: string) => {
+    const res = await fetch(`${API_URL}/wallet/me`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to load wallet');
+    return res.json();
+  },
+
+  getPaymentMethods: async (token: string) => {
+    const res = await fetch(`${API_URL}/wallet/payment-methods`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to load payment methods');
+    return res.json();
+  },
+
+  getTransactions: async (token: string) => {
+    const res = await fetch(`${API_URL}/wallet/transactions`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to load transactions');
+    return res.json();
+  },
+
+  getWalletSpending: async (token: string) => {
+    const res = await fetch(`${API_URL}/wallet/spending`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to load spending');
+    return res.json();
+  },
+  getProviderDashboard: async (token: string) => {
+    const r = await fetch(`${API_URL}/provider/dashboard`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!r.ok) { const e = await r.json().catch(() => ({ message: 'Server error' })); throw new Error(e.message || 'Failed to load provider dashboard'); }
+    return r.json();
+  },
+  // ── User profile ──────────────────────────────────────────────
+  getMe: async (token: string) => {
+    const res = await fetch(`${API_URL}/auth/me`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to load user');
+    return res.json();
+  },
+
+  // ── Chat ──────────────────────────────────────────────────────
+  getChatSession: async (token: string) => {
+    const res = await fetch(`${API_URL}/chat/session`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to load chat session');
+    return res.json();
+  },
+
+  sendChatMessage: async (token: string, content: string) => {
+    const res = await fetch(`${API_URL}/chat/message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) throw new Error('Failed to send message');
+    return res.json();
+  },
+
+  clearChatSession: async (token: string) => {
+    const res = await fetch(`${API_URL}/chat/session`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to clear session');
+    return res.json();
+  },
 };

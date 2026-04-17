@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma.service';
 import * as bcrypt from 'bcryptjs';
@@ -14,7 +14,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-  ) {}
+  ) { }
 
   // ── Shared: find or create OAuth user ───────────────────────────
   private async findOrCreateOAuthUser(email: string, fullName: string, provider: string) {
@@ -77,16 +77,16 @@ export class AuthService {
         provider: 'email',
         healthProfile: healthProfile
           ? {
-              create: {
-                age: healthProfile.age,
-                gender: healthProfile.gender,
-                backPain: healthProfile.backPain ?? false,
-                jointPain: healthProfile.jointPain ?? false,
-                sportsInjury: healthProfile.sportsInjury ?? false,
-                neckIssues: healthProfile.neckIssues ?? false,
-                activityLevel: healthProfile.activityLevel,
-              },
-            }
+            create: {
+              age: healthProfile.age,
+              gender: healthProfile.gender,
+              backPain: healthProfile.backPain ?? false,
+              jointPain: healthProfile.jointPain ?? false,
+              sportsInjury: healthProfile.sportsInjury ?? false,
+              neckIssues: healthProfile.neckIssues ?? false,
+              activityLevel: healthProfile.activityLevel,
+            },
+          }
           : undefined,
       },
     });
@@ -127,20 +127,20 @@ export class AuthService {
 
   // ── Google ────────────────────────────────────────────────────────
   async googleAuth(accessToken: string) {
-  try {
-    const response = await axios.get(
-      'https://www.googleapis.com/oauth2/v3/userinfo',
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
+    try {
+      const response = await axios.get(
+        'https://www.googleapis.com/oauth2/v3/userinfo',
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
 
-    const { email, name } = response.data;
-    if (!email) throw new UnauthorizedException('Invalid Google token');
+      const { email, name } = response.data;
+      if (!email) throw new UnauthorizedException('Invalid Google token');
 
-    return this.findOrCreateOAuthUser(email, name || email, 'google');
-  } catch {
-    throw new UnauthorizedException('Google authentication failed');
+      return this.findOrCreateOAuthUser(email, name || email, 'google');
+    } catch {
+      throw new UnauthorizedException('Google authentication failed');
+    }
   }
-}
 
   // ── Facebook ──────────────────────────────────────────────────────
   async facebookAuth(accessToken: string) {
@@ -187,5 +187,13 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Apple authentication failed');
     }
+  }
+  async getMe(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, fullName: true, email: true, phone: true, role: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
   }
 }

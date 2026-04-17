@@ -1,15 +1,20 @@
 // src/doctors/doctors.controller.ts
-import { Controller, Get, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { DoctorsService } from './doctors.service';
-import { AuthGuard } from '@nestjs/passport';
 
 @Controller('doctors')
 export class DoctorsController {
   constructor(private readonly doctorsService: DoctorsService) {}
 
-  // GET /doctors  — public, no auth required
+  // GET /doctors
   @Get()
   getAll() {
     return this.doctorsService.getAllDoctors();
+  }
+
+  // GET /doctors/:id  ← used by BookSession to load doctor info
+  @Get(':id')
+  getOne(@Param('id') id: string) {
+    return this.doctorsService.getDoctorById(id);
   }
 }

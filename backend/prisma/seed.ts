@@ -323,45 +323,45 @@ async function main() {
   // Patient 1 — Ahmed (past completed + future upcoming)
   const slots_p1 = await Promise.all([
     prisma.slot.create({ data: { doctorId: doctorUser1.doctor!.id, date: past(21), startTime: '10:00 AM', endTime: '11:00 AM', isBooked: true } }),
-    prisma.slot.create({ data: { doctorId: doctorUser1.doctor!.id, date: past(14), startTime: '2:00 PM',  endTime: '3:00 PM',  isBooked: true } }),
+    prisma.slot.create({ data: { doctorId: doctorUser1.doctor!.id, date: past(14), startTime: '2:00 PM', endTime: '3:00 PM', isBooked: true } }),
     prisma.slot.create({ data: { doctorId: doctorUser2.doctor!.id, date: past(10), startTime: '11:00 AM', endTime: '12:00 PM', isBooked: true } }),
-    prisma.slot.create({ data: { doctorId: doctorUser1.doctor!.id, date: past(7),  startTime: '3:00 PM',  endTime: '4:00 PM',  isBooked: true } }),
-    prisma.slot.create({ data: { doctorId: doctorUser3.doctor!.id, date: past(3),  startTime: '9:00 AM',  endTime: '10:00 AM', isBooked: true } }),
+    prisma.slot.create({ data: { doctorId: doctorUser1.doctor!.id, date: past(7), startTime: '3:00 PM', endTime: '4:00 PM', isBooked: true } }),
+    prisma.slot.create({ data: { doctorId: doctorUser3.doctor!.id, date: past(3), startTime: '9:00 AM', endTime: '10:00 AM', isBooked: true } }),
     // future
     prisma.slot.create({ data: { doctorId: doctorUser1.doctor!.id, date: future(1), startTime: '10:00 AM', endTime: '11:00 AM', isBooked: true } }),
-    prisma.slot.create({ data: { doctorId: doctorUser2.doctor!.id, date: future(4), startTime: '2:30 PM',  endTime: '3:30 PM',  isBooked: true } }),
+    prisma.slot.create({ data: { doctorId: doctorUser2.doctor!.id, date: future(4), startTime: '2:30 PM', endTime: '3:30 PM', isBooked: true } }),
     prisma.slot.create({ data: { doctorId: doctorUser3.doctor!.id, date: future(7), startTime: '11:00 AM', endTime: '12:00 PM', isBooked: true } }),
   ]);
 
   // Patient 2 — Sarah
   const slots_p2 = await Promise.all([
-    prisma.slot.create({ data: { doctorId: doctorUser3.doctor!.id, date: past(15), startTime: '9:00 AM',  endTime: '10:00 AM', isBooked: true } }),
-    prisma.slot.create({ data: { doctorId: doctorUser5.doctor!.id, date: past(8),  startTime: '11:00 AM', endTime: '12:00 PM', isBooked: true } }),
-    prisma.slot.create({ data: { doctorId: doctorUser3.doctor!.id, date: future(2), startTime: '3:00 PM',  endTime: '4:00 PM',  isBooked: true } }),
+    prisma.slot.create({ data: { doctorId: doctorUser3.doctor!.id, date: past(15), startTime: '9:00 AM', endTime: '10:00 AM', isBooked: true } }),
+    prisma.slot.create({ data: { doctorId: doctorUser5.doctor!.id, date: past(8), startTime: '11:00 AM', endTime: '12:00 PM', isBooked: true } }),
+    prisma.slot.create({ data: { doctorId: doctorUser3.doctor!.id, date: future(2), startTime: '3:00 PM', endTime: '4:00 PM', isBooked: true } }),
   ]);
 
   // Patient 3 — Khalid
   const slots_p3 = await Promise.all([
     prisma.slot.create({ data: { doctorId: doctorUser4.doctor!.id, date: past(12), startTime: '10:00 AM', endTime: '11:00 AM', isBooked: true } }),
-    prisma.slot.create({ data: { doctorId: doctorUser2.doctor!.id, date: past(5),  startTime: '2:00 PM',  endTime: '3:00 PM',  isBooked: true } }),
+    prisma.slot.create({ data: { doctorId: doctorUser2.doctor!.id, date: past(5), startTime: '2:00 PM', endTime: '3:00 PM', isBooked: true } }),
     prisma.slot.create({ data: { doctorId: doctorUser4.doctor!.id, date: future(3), startTime: '10:00 AM', endTime: '11:00 AM', isBooked: true } }),
-    prisma.slot.create({ data: { doctorId: doctorUser4.doctor!.id, date: future(6), startTime: '2:00 PM',  endTime: '3:00 PM',  isBooked: true } }),
+    prisma.slot.create({ data: { doctorId: doctorUser4.doctor!.id, date: future(6), startTime: '2:00 PM', endTime: '3:00 PM', isBooked: true } }),
   ]);
 
   // Patient 4 — Layla
   const slots_p4 = await Promise.all([
     prisma.slot.create({ data: { doctorId: doctorUser1.doctor!.id, date: past(10), startTime: '11:00 AM', endTime: '12:00 PM', isBooked: true } }),
-    prisma.slot.create({ data: { doctorId: doctorUser5.doctor!.id, date: future(2), startTime: '9:00 AM',  endTime: '10:00 AM', isBooked: true } }),
+    prisma.slot.create({ data: { doctorId: doctorUser5.doctor!.id, date: future(2), startTime: '9:00 AM', endTime: '10:00 AM', isBooked: true } }),
   ]);
 
   // Free slots (not booked)
   await Promise.all([
-    prisma.slot.create({ data: { doctorId: doctorUser1.doctor!.id, date: future(2),  startTime: '2:00 PM',  endTime: '3:00 PM',  isBooked: false } }),
-    prisma.slot.create({ data: { doctorId: doctorUser1.doctor!.id, date: future(3),  startTime: '10:00 AM', endTime: '11:00 AM', isBooked: false } }),
-    prisma.slot.create({ data: { doctorId: doctorUser2.doctor!.id, date: future(1),  startTime: '9:00 AM',  endTime: '10:00 AM', isBooked: false } }),
-    prisma.slot.create({ data: { doctorId: doctorUser3.doctor!.id, date: future(2),  startTime: '11:00 AM', endTime: '12:00 PM', isBooked: false } }),
-    prisma.slot.create({ data: { doctorId: doctorUser4.doctor!.id, date: future(1),  startTime: '3:00 PM',  endTime: '4:00 PM',  isBooked: false } }),
-    prisma.slot.create({ data: { doctorId: doctorUser5.doctor!.id, date: future(3),  startTime: '4:00 PM',  endTime: '5:00 PM',  isBooked: false } }),
+    prisma.slot.create({ data: { doctorId: doctorUser1.doctor!.id, date: future(2), startTime: '2:00 PM', endTime: '3:00 PM', isBooked: false } }),
+    prisma.slot.create({ data: { doctorId: doctorUser1.doctor!.id, date: future(3), startTime: '10:00 AM', endTime: '11:00 AM', isBooked: false } }),
+    prisma.slot.create({ data: { doctorId: doctorUser2.doctor!.id, date: future(1), startTime: '9:00 AM', endTime: '10:00 AM', isBooked: false } }),
+    prisma.slot.create({ data: { doctorId: doctorUser3.doctor!.id, date: future(2), startTime: '11:00 AM', endTime: '12:00 PM', isBooked: false } }),
+    prisma.slot.create({ data: { doctorId: doctorUser4.doctor!.id, date: future(1), startTime: '3:00 PM', endTime: '4:00 PM', isBooked: false } }),
+    prisma.slot.create({ data: { doctorId: doctorUser5.doctor!.id, date: future(3), startTime: '4:00 PM', endTime: '5:00 PM', isBooked: false } }),
   ]);
 
   console.log('✅ Slots created');
@@ -370,22 +370,22 @@ async function main() {
   // Patient 1 — Ahmed (5 completed + 3 upcoming)
   await prisma.booking.createMany({
     data: [
-      { patientId: patient1.id, doctorId: doctorUser1.doctor!.id, slotId: slots_p1[0].id, status: 'COMPLETED', sessionType: 'CLINIC',      notes: 'Initial lower back assessment', bookedVia: 'APP' },
-      { patientId: patient1.id, doctorId: doctorUser1.doctor!.id, slotId: slots_p1[1].id, status: 'COMPLETED', sessionType: 'HOME_VISIT',   notes: 'Core strengthening exercises', bookedVia: 'APP' },
-      { patientId: patient1.id, doctorId: doctorUser2.doctor!.id, slotId: slots_p1[2].id, status: 'COMPLETED', sessionType: 'CLINIC',      notes: 'Spine alignment check', bookedVia: 'APP' },
-      { patientId: patient1.id, doctorId: doctorUser1.doctor!.id, slotId: slots_p1[3].id, status: 'COMPLETED', sessionType: 'CLINIC',      notes: 'Manual therapy session', bookedVia: 'APP' },
-      { patientId: patient1.id, doctorId: doctorUser3.doctor!.id, slotId: slots_p1[4].id, status: 'COMPLETED', sessionType: 'HOME_VISIT',   notes: 'Mobility improvement exercises', bookedVia: 'APP' },
-      { patientId: patient1.id, doctorId: doctorUser1.doctor!.id, slotId: slots_p1[5].id, status: 'CONFIRMED', sessionType: 'CLINIC',      notes: 'Follow-up lower back therapy', bookedVia: 'APP' },
-      { patientId: patient1.id, doctorId: doctorUser2.doctor!.id, slotId: slots_p1[6].id, status: 'PENDING',   sessionType: 'HOME_VISIT',   notes: 'Shoulder mobility session', bookedVia: 'APP' },
-      { patientId: patient1.id, doctorId: doctorUser3.doctor!.id, slotId: slots_p1[7].id, status: 'CONFIRMED', sessionType: 'CLINIC',      notes: 'Final assessment session', bookedVia: 'APP' },
+      { patientId: patient1.id, doctorId: doctorUser1.doctor!.id, slotId: slots_p1[0].id, status: 'COMPLETED', sessionType: 'CLINIC', notes: 'Initial lower back assessment', bookedVia: 'APP' },
+      { patientId: patient1.id, doctorId: doctorUser1.doctor!.id, slotId: slots_p1[1].id, status: 'COMPLETED', sessionType: 'HOME_VISIT', notes: 'Core strengthening exercises', bookedVia: 'APP' },
+      { patientId: patient1.id, doctorId: doctorUser2.doctor!.id, slotId: slots_p1[2].id, status: 'COMPLETED', sessionType: 'CLINIC', notes: 'Spine alignment check', bookedVia: 'APP' },
+      { patientId: patient1.id, doctorId: doctorUser1.doctor!.id, slotId: slots_p1[3].id, status: 'COMPLETED', sessionType: 'CLINIC', notes: 'Manual therapy session', bookedVia: 'APP' },
+      { patientId: patient1.id, doctorId: doctorUser3.doctor!.id, slotId: slots_p1[4].id, status: 'COMPLETED', sessionType: 'HOME_VISIT', notes: 'Mobility improvement exercises', bookedVia: 'APP' },
+      { patientId: patient1.id, doctorId: doctorUser1.doctor!.id, slotId: slots_p1[5].id, status: 'CONFIRMED', sessionType: 'CLINIC', notes: 'Follow-up lower back therapy', bookedVia: 'APP' },
+      { patientId: patient1.id, doctorId: doctorUser2.doctor!.id, slotId: slots_p1[6].id, status: 'PENDING', sessionType: 'HOME_VISIT', notes: 'Shoulder mobility session', bookedVia: 'APP' },
+      { patientId: patient1.id, doctorId: doctorUser3.doctor!.id, slotId: slots_p1[7].id, status: 'CONFIRMED', sessionType: 'CLINIC', notes: 'Final assessment session', bookedVia: 'APP' },
     ],
   });
 
   // Patient 2 — Sarah
   await prisma.booking.createMany({
     data: [
-      { patientId: patient2.id, doctorId: doctorUser3.doctor!.id, slotId: slots_p2[0].id, status: 'COMPLETED', sessionType: 'CLINIC',    notes: 'Sports injury assessment', bookedVia: 'APP' },
-      { patientId: patient2.id, doctorId: doctorUser5.doctor!.id, slotId: slots_p2[1].id, status: 'COMPLETED', sessionType: 'CLINIC',    notes: 'Knee rehabilitation', bookedVia: 'APP' },
+      { patientId: patient2.id, doctorId: doctorUser3.doctor!.id, slotId: slots_p2[0].id, status: 'COMPLETED', sessionType: 'CLINIC', notes: 'Sports injury assessment', bookedVia: 'APP' },
+      { patientId: patient2.id, doctorId: doctorUser5.doctor!.id, slotId: slots_p2[1].id, status: 'COMPLETED', sessionType: 'CLINIC', notes: 'Knee rehabilitation', bookedVia: 'APP' },
       { patientId: patient2.id, doctorId: doctorUser3.doctor!.id, slotId: slots_p2[2].id, status: 'CONFIRMED', sessionType: 'HOME_VISIT', notes: 'Recovery follow-up', bookedVia: 'APP' },
     ],
   });
@@ -393,9 +393,9 @@ async function main() {
   // Patient 3 — Khalid
   await prisma.booking.createMany({
     data: [
-      { patientId: patient3.id, doctorId: doctorUser4.doctor!.id, slotId: slots_p3[0].id, status: 'COMPLETED', sessionType: 'CLINIC',    notes: 'Neurological assessment', bookedVia: 'APP' },
-      { patientId: patient3.id, doctorId: doctorUser2.doctor!.id, slotId: slots_p3[1].id, status: 'COMPLETED', sessionType: 'CLINIC',    notes: 'Neck pain treatment', bookedVia: 'APP' },
-      { patientId: patient3.id, doctorId: doctorUser4.doctor!.id, slotId: slots_p3[2].id, status: 'PENDING',   sessionType: 'CLINIC',    notes: 'Joint pain follow-up', bookedVia: 'APP' },
+      { patientId: patient3.id, doctorId: doctorUser4.doctor!.id, slotId: slots_p3[0].id, status: 'COMPLETED', sessionType: 'CLINIC', notes: 'Neurological assessment', bookedVia: 'APP' },
+      { patientId: patient3.id, doctorId: doctorUser2.doctor!.id, slotId: slots_p3[1].id, status: 'COMPLETED', sessionType: 'CLINIC', notes: 'Neck pain treatment', bookedVia: 'APP' },
+      { patientId: patient3.id, doctorId: doctorUser4.doctor!.id, slotId: slots_p3[2].id, status: 'PENDING', sessionType: 'CLINIC', notes: 'Joint pain follow-up', bookedVia: 'APP' },
       { patientId: patient3.id, doctorId: doctorUser4.doctor!.id, slotId: slots_p3[3].id, status: 'CONFIRMED', sessionType: 'HOME_VISIT', notes: 'Home therapy session', bookedVia: 'APP' },
     ],
   });
@@ -403,12 +403,126 @@ async function main() {
   // Patient 4 — Layla
   await prisma.booking.createMany({
     data: [
-      { patientId: patient4.id, doctorId: doctorUser1.doctor!.id, slotId: slots_p4[0].id, status: 'COMPLETED', sessionType: 'CLINIC',    notes: 'Back pain assessment', bookedVia: 'APP' },
-      { patientId: patient4.id, doctorId: doctorUser5.doctor!.id, slotId: slots_p4[1].id, status: 'CONFIRMED', sessionType: 'CLINIC',    notes: 'Pilates therapy session', bookedVia: 'APP' },
+      { patientId: patient4.id, doctorId: doctorUser1.doctor!.id, slotId: slots_p4[0].id, status: 'COMPLETED', sessionType: 'CLINIC', notes: 'Back pain assessment', bookedVia: 'APP' },
+      { patientId: patient4.id, doctorId: doctorUser5.doctor!.id, slotId: slots_p4[1].id, status: 'CONFIRMED', sessionType: 'CLINIC', notes: 'Pilates therapy session', bookedVia: 'APP' },
     ],
   });
 
   console.log('✅ Bookings created');
+  // src/prisma/seed.ts — add after patients are created
+
+  // ── Wallets ───────────────────────────────────────────────
+  const wallet1 = await prisma.wallet.create({
+    data: {
+      userId: patient1.id,
+      balance: 2450.00,
+      currency: 'QAR',
+      rewards: { create: { points: 2450 } },
+    },
+  });
+
+  const wallet2 = await prisma.wallet.create({
+    data: {
+      userId: patient2.id,
+      balance: 800.00,
+      currency: 'QAR',
+      rewards: { create: { points: 800 } },
+    },
+  });
+
+  // ── Payment Methods ───────────────────────────────────────
+  await prisma.paymentMethod.createMany({
+    data: [
+      {
+        userId: patient1.id,
+        type: 'CARD',
+        label: 'Primary Card',
+        sublabel: '•••• •••• •••• 4532',
+        last4: '4532',
+        expiry: '12/26',
+        holderName: 'Ahmed Al-Mansouri',
+        provider: 'visa',
+        isDefault: true,
+      },
+      {
+        userId: patient1.id,
+        type: 'BANK',
+        label: 'Qatar National Bank',
+        sublabel: 'Account ending in 8901',
+        last4: '8901',
+        provider: 'qnb',
+        isVerified: true,
+      },
+      {
+        userId: patient1.id,
+        type: 'DIGITAL_WALLET',
+        label: 'Apple Pay',
+        sublabel: 'Touch ID enabled',
+        provider: 'apple',
+      },
+    ],
+  });
+
+  // ── Transactions ──────────────────────────────────────────
+  const now = new Date();
+  const daysAgo = (n: number) => new Date(now.getTime() - n * 86_400_000);
+
+  await prisma.transaction.createMany({
+    data: [
+      {
+        walletId: wallet1.id,
+        type: 'DEBIT',
+        category: 'SESSION',
+        title: 'Dr. Sarah Al-Rashid',
+        subtitle: 'Physiotherapy Session',
+        amount: -180.00,
+        status: 'COMPLETED',
+        createdAt: daysAgo(0),
+      },
+      {
+        walletId: wallet1.id,
+        type: 'CREDIT',
+        category: 'TOP_UP',
+        title: 'Wallet Top-up',
+        subtitle: 'Bank Transfer',
+        amount: 500.00,
+        status: 'COMPLETED',
+        createdAt: daysAgo(1),
+      },
+      {
+        walletId: wallet1.id,
+        type: 'DEBIT',
+        category: 'HOME_VISIT',
+        title: 'Home Visit Session',
+        subtitle: 'Dr. Omar Khalil',
+        amount: -250.00,
+        status: 'COMPLETED',
+        createdAt: daysAgo(3),
+      },
+      {
+        walletId: wallet1.id,
+        type: 'CREDIT',
+        category: 'REFERRAL',
+        title: 'Referral Bonus',
+        subtitle: 'Friend joined Physio AI',
+        amount: 50.00,
+        status: 'COMPLETED',
+        createdAt: daysAgo(4),
+      },
+      {
+        walletId: wallet1.id,
+        type: 'DEBIT',
+        category: 'REHABILITATION',
+        title: 'Rehab Program Payment',
+        subtitle: '4-week package',
+        amount: -720.00,
+        status: 'COMPLETED',
+        createdAt: daysAgo(6),
+      },
+    ],
+  });
+
+  console.log('✅ Wallets, transactions & payment methods created');
 
   console.log('');
   console.log('🎉 Seed complete!');

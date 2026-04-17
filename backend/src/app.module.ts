@@ -7,6 +7,9 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DoctorsModule } from './doctors/doctors.module';
+import { WalletModule } from './wallet/wallet.module';
+import { ProviderDashboardModule } from './provider-dashboard/provider-dashboard.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -16,6 +19,9 @@ import { DoctorsModule } from './doctors/doctors.module';
     SessionsModule,
     NotificationsModule,
     DoctorsModule,
+    WalletModule,
+    ProviderDashboardModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],

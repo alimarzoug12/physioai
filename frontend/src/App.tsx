@@ -48,8 +48,8 @@ class App extends React.Component<{}, State> {
               <Route path="/welcome"         element={<WelcomeToPhysioAI />} />
               <Route path="/ai-assistant"    element={<AIAssistantCompleteFlowWithRouter />} />
               <Route path="/specialists"     element={<PhysioBookingFlowWithRouter />} />
-              <Route path="/specialist/:id"  element={<SpecialistProfileWithRouter />} />
-              <Route path="/book"            element={<BookSessionWithRouter />} />
+              <Route path="/specialist/:id" element={<SpecialistProfileWithRouter />} />
+              <Route path="/book/:doctorId?" element={<BookSessionWithRouter />} />
               <Route path="/dashboard"       element={<PatientDashboardWithRouter />} />
               <Route path="/sessions"        element={<SessionOverviewWithRouter />} />
               <Route path="/wallet"          element={<WalletWithRouter />} />
