@@ -1,58 +1,78 @@
-import React, { createContext, useContext, useState } from 'react';
+// src/context/AuthContext.tsx
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
+// ── Types ──────────────────────────────────────────────────────────
 interface User {
   id: string;
   email: string;
   fullName: string;
   role: string;
+  emailVerified?: boolean;
 }
 
-interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  login: (token: string, user: User) => void;
-  logout: () => void;
-  isAuthenticated: boolean;
+// FIXED: added `token` to the exported interface
+export interface AuthContextValue {
+  user:    User | null;
+  token:   string | null;    // ← was missing, caused all 3 TS2339 errors
+  loading: boolean;
+  login:   (token: string, user: User) => void;
+  logout:  () => void;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextValue>({
+  user:    null,
+  token:   null,
+  loading: true,
+  login:   () => {},
+  logout:  () => {},
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user,    setUser]    = useState<User | null>(null);
+  const [token,   setToken]   = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem('token');
-  });
+  // Restore session from localStorage on app start
+  useEffect(() => {
+    try {
+      const storedToken = localStorage.getItem('token');
+      const storedUser  = localStorage.getItem('user');
+      if (storedToken && storedUser) {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+      }
+    } catch {
+      // corrupt storage — clear it
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const login = (token: string, user: User) => {
-    setToken(token);
-    setUser(user);
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
+  const login = (newToken: string, newUser: User) => {
+    localStorage.setItem('token', newToken);
+    localStorage.setItem('user',  JSON.stringify(newUser));
+    setToken(newToken);
+    setUser(newUser);
   };
 
   const logout = () => {
-    setToken(null);
-    setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    setToken(null);
+    setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{
-      user, token, login, logout,
-      isAuthenticated: !!token,
-    }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
-  return context;
-};
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+export default AuthContext;

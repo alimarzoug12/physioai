@@ -8,23 +8,30 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  fullName     String
-  phone        String?
-  role         Role     @default(PATIENT)
-  provider     String   @default("email")
-  createdAt    DateTime @default(now())
-  wallet         Wallet?
-  paymentMethods PaymentMethod[]
-  chatSessions ChatSession[]
+  id               String    @id @default(uuid())
+  email            String    @unique
+  passwordHash     String
+  fullName         String
+  phone            String?
+  role             Role      @default(PATIENT)
+  provider         String    @default("email")
+  emailVerified    Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  verificationCode      String?
+  verificationExpiresAt DateTime?
+  resetToken            String?
+  resetTokenExpiresAt   DateTime?
 
-  bookings     Booking[]
-  doctor       Doctor?
-  healthProfile HealthProfile?
-  healthInsights HealthInsight[]
-  reminders      Reminder[]
+  bookings         Booking[]
+  doctor           Doctor?
+  healthProfile    HealthProfile?
+  healthInsights   HealthInsight[]
+  reminders        Reminder[]
+  wallet           Wallet?
+  paymentMethods   PaymentMethod[]
+  chatSessions     ChatSession[]
+  refreshTokens    RefreshToken[]
+  emailTokens      EmailToken[]
 }
 
 enum Role {
@@ -264,4 +271,45 @@ model ChatMessage {
 enum MessageRole {
   USER
   ASSISTANT
+}
+
+model PromoCode {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  discountPercent Float
+  isActive        Boolean  @default(true)
+  expiresAt       DateTime?
+  usageLimit      Int?
+  usageCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+}
+
+// ── Refresh tokens ────────────────────────────────────────────────
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique                        // store hash, not raw token
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── Email verification & password reset tokens ────────────────────
+model EmailToken {
+  id        String         @id @default(uuid())
+  userId    String
+  token     String         @unique
+  type      EmailTokenType
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum EmailTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
 }

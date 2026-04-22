@@ -7,130 +7,108 @@ export class ProviderDashboardService {
   constructor(private prisma: PrismaService) {}
 
   async getDashboard(userId: string) {
-    // Get the doctor record for this user
     const doctor = await this.prisma.doctor.findUnique({
       where: { userId },
       include: { user: true, center: true },
     });
-
     if (!doctor) return null;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today.getTime() + 86_400_000);
-    const yesterday = new Date(today.getTime() - 86_400_000);
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd   = new Date(todayStart.getTime() + 86_400_000);
+    const yesterday  = new Date(todayStart.getTime() - 86_400_000);
+    const weekAgo    = new Date(todayStart.getTime() - 7 * 86_400_000);
 
-    // ── Today's sessions ───────────────────────────────────────
+    // ── Today's bookings ───────────────────────────────────────
     const todayBookings = await this.prisma.booking.findMany({
       where: {
         doctorId: doctor.id,
-        slot: { date: { gte: today, lt: tomorrow } },
+        slot: { date: { gte: todayStart, lt: todayEnd } },
         status: { in: ['CONFIRMED', 'PENDING', 'COMPLETED'] },
       },
-      include: {
-        patient: true,
-        slot: true,
-      },
+      include: { patient: { include: { wallet: true } }, slot: true },
       orderBy: { slot: { startTime: 'asc' } },
     });
 
-    // Yesterday's session count for % change
     const yesterdayCount = await this.prisma.booking.count({
-      where: {
-        doctorId: doctor.id,
-        slot: { date: { gte: yesterday, lt: today } },
-        status: { in: ['CONFIRMED', 'PENDING', 'COMPLETED'] },
-      },
+      where: { doctorId: doctor.id, slot: { date: { gte: yesterday, lt: todayStart } }, status: { in: ['CONFIRMED', 'PENDING', 'COMPLETED'] } },
     });
+    const todayCount     = todayBookings.length;
+    const sessionChange  = yesterdayCount > 0 ? Math.round(((todayCount - yesterdayCount) / yesterdayCount) * 100) : (todayCount > 0 ? 100 : 0);
 
-    const todayCount = todayBookings.length;
-    const sessionChange = yesterdayCount > 0
-      ? Math.round(((todayCount - yesterdayCount) / yesterdayCount) * 100)
-      : 0;
+    // ── Earnings ───────────────────────────────────────────────
+    const todayCompleted    = todayBookings.filter(b => b.status === 'COMPLETED').length;
+    const todayEarnings     = todayCompleted * doctor.pricePerSession;
+    const yestCompleted     = await this.prisma.booking.count({ where: { doctorId: doctor.id, slot: { date: { gte: yesterday, lt: todayStart } }, status: 'COMPLETED' } });
+    const yestEarnings      = yestCompleted * doctor.pricePerSession;
+    const earningsChange    = yestEarnings > 0 ? Math.round(((todayEarnings - yestEarnings) / yestEarnings) * 100) : (todayEarnings > 0 ? 100 : 0);
 
-    // ── Today's earnings ───────────────────────────────────────
-    const todayEarnings = todayBookings
-      .filter(b => b.status === 'COMPLETED')
-      .reduce((sum) => sum + doctor.pricePerSession, 0);
-
-    const yesterdayEarnings = await this.prisma.booking.count({
-      where: {
-        doctorId: doctor.id,
-        slot: { date: { gte: yesterday, lt: today } },
-        status: 'COMPLETED',
-      },
-    }) * doctor.pricePerSession;
-
-    const earningsChange = yesterdayEarnings > 0
-      ? Math.round(((todayEarnings - yesterdayEarnings) / yesterdayEarnings) * 100)
-      : 0;
-
-    // ── Weekly earnings chart (last 7 days) ────────────────────
-    const weeklyData = await Promise.all(
+    // ── Weekly chart (last 7 days) ─────────────────────────────
+    const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weeklyChart = await Promise.all(
       Array.from({ length: 7 }, async (_, i) => {
-        const dayStart = new Date(today.getTime() - (6 - i) * 86_400_000);
-        const dayEnd   = new Date(dayStart.getTime() + 86_400_000);
-        const count    = await this.prisma.booking.count({
-          where: {
-            doctorId: doctor.id,
-            slot: { date: { gte: dayStart, lt: dayEnd } },
-            status: 'COMPLETED',
-          },
-        });
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        return {
-          day:      days[dayStart.getDay()],
-          earnings: count * doctor.pricePerSession,
-        };
+        const ds = new Date(todayStart.getTime() - (6 - i) * 86_400_000);
+        const de = new Date(ds.getTime() + 86_400_000);
+        const n  = await this.prisma.booking.count({ where: { doctorId: doctor.id, slot: { date: { gte: ds, lt: de } }, status: 'COMPLETED' } });
+        return { day: DAYS[ds.getDay()], earnings: n * doctor.pricePerSession };
       })
     );
 
     // ── Weekly totals ──────────────────────────────────────────
-    const weekStart = new Date(today.getTime() - 7 * 86_400_000);
     const weeklyBookings = await this.prisma.booking.findMany({
-      where: {
-        doctorId: doctor.id,
-        slot: { date: { gte: weekStart } },
-      },
+      where: { doctorId: doctor.id, slot: { date: { gte: weekAgo } }, status: 'COMPLETED' },
       include: { slot: true },
     });
+    const homeVisits     = weeklyBookings.filter(b => b.sessionType === 'HOME_VISIT');
+    const clinicSessions = weeklyBookings.filter(b => b.sessionType === 'CLINIC');
+    const weeklyTotal    = weeklyBookings.length * doctor.pricePerSession;
+    const homeEarnings   = homeVisits.length   * doctor.pricePerSession;
+    const clinicEarnings = clinicSessions.length * doctor.pricePerSession;
 
-    const weeklyCompleted  = weeklyBookings.filter(b => b.status === 'COMPLETED');
-    const weeklyTotal      = weeklyCompleted.length * doctor.pricePerSession;
-    const homeVisits       = weeklyCompleted.filter(b => b.sessionType === 'HOME_VISIT');
-    const clinicSessions   = weeklyCompleted.filter(b => b.sessionType === 'CLINIC');
-    const homeEarnings     = homeVisits.length   * doctor.pricePerSession;
-    const clinicEarnings   = clinicSessions.length * doctor.pricePerSession;
+    // ── All-time analytics ─────────────────────────────────────
+    const allBookings      = await this.prisma.booking.count({ where: { doctorId: doctor.id } });
+    const allCompleted     = await this.prisma.booking.count({ where: { doctorId: doctor.id, status: 'COMPLETED' } });
+    const uniquePatientIds = await this.prisma.booking.findMany({ where: { doctorId: doctor.id }, select: { patientId: true }, distinct: ['patientId'] });
+    const totalPatients    = uniquePatientIds.length;
+    const successRate      = allBookings > 0 ? Math.round((allCompleted / allBookings) * 100) : 0;
 
-    // ── Practice analytics ─────────────────────────────────────
-    const allPatientIds = await this.prisma.booking.findMany({
-      where: { doctorId: doctor.id },
-      select: { patientId: true },
-      distinct: ['patientId'],
+    // ── Patient list with wallet balances ──────────────────────
+    const patientIds = uniquePatientIds.map(r => r.patientId);
+    const patientRecords = await this.prisma.user.findMany({
+      where:   { id: { in: patientIds } },
+      include: {
+        wallet: { include: { rewards: true } },
+        bookings: { where: { doctorId: doctor.id }, orderBy: { createdAt: 'desc' }, take: 1 },
+        healthProfile: true,
+      },
     });
-    const totalPatients = allPatientIds.length;
 
-    const totalBookings    = await this.prisma.booking.count({ where: { doctorId: doctor.id } });
-    const completedAll     = await this.prisma.booking.count({ where: { doctorId: doctor.id, status: 'COMPLETED' } });
-    const successRate      = totalBookings > 0 ? Math.round((completedAll / totalBookings) * 100) : 0;
+    const patientList = patientRecords.map(p => ({
+      id:             p.id,
+      fullName:       p.fullName,
+      avatarUrl:      `https://ui-avatars.com/api/?name=${encodeURIComponent(p.fullName)}&background=6b7280&color=fff&size=64`,
+      walletBalance:  p.wallet?.balance ?? 0,
+      walletCurrency: p.wallet?.currency ?? 'QAR',
+      rewardPoints:   p.wallet?.rewards?.points ?? 0,
+      lastVisit:      p.bookings[0]?.createdAt ? this.timeAgo(p.bookings[0].createdAt) : 'No visits yet',
+      condition:      this.getCondition(p.healthProfile),
+      totalBookings:  p.bookings.length,
+    })).sort((a, b) => b.walletBalance - a.walletBalance); // sort by wallet balance desc
 
-    // ── Appointments (today, formatted) ───────────────────────
+    // ── Today's appointments ───────────────────────────────────
     const appointments = todayBookings.map(b => ({
-      id:           b.id,
-      patientName:  b.patient.fullName,
+      id:            b.id,
+      patientName:   b.patient.fullName,
       patientAvatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(b.patient.fullName)}&background=3b82f6&color=fff&size=64`,
-      treatment:    b.notes ?? 'Physiotherapy Session',
-      time:         b.slot.startTime,
-      sessionType:  b.sessionType,
-      status:       b.status,
+      patientWallet: b.patient.wallet?.balance ?? 0,
+      treatment:     b.notes ?? 'Physiotherapy Session',
+      time:          b.slot.startTime,
+      sessionType:   b.sessionType,
+      status:        b.status,
     }));
 
     // ── Recent messages (last 5 bookings with notes) ───────────
-    const recentMessages = await this.prisma.booking.findMany({
-      where: {
-        doctorId: doctor.id,
-        notes:    { not: null },
-      },
+    const recentMsgs = await this.prisma.booking.findMany({
+      where:   { doctorId: doctor.id, notes: { not: null } },
       include: { patient: true },
       orderBy: { createdAt: 'desc' },
       take: 5,
@@ -138,53 +116,61 @@ export class ProviderDashboardService {
 
     return {
       doctor: {
-        id:         doctor.id,
-        fullName:   doctor.user.fullName,
-        specialty:  doctor.specialties[0] ?? 'Physiotherapist',
-        rating:     doctor.rating,
+        id:        doctor.id,
+        fullName:  doctor.user.fullName,
+        specialty: doctor.specialties[0] ?? 'Physiotherapist',
+        rating:    doctor.rating,
         experience: this.getExp(doctor.bio),
-        center:     doctor.center.name,
-        avatarUrl:  `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.user.fullName)}&background=3b82f6&color=fff&size=128`,
+        center:    doctor.center.name,
+        avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.user.fullName)}&background=3b82f6&color=fff&size=128`,
       },
       stats: {
-        todaySessions:  todayCount,
+        todaySessions: todayCount,
         sessionChange,
         todayEarnings,
         earningsChange,
         currency: 'QAR',
       },
-      weeklyChart: weeklyData,
+      weeklyChart,
       weekly: {
-        totalEarnings:    weeklyTotal,
-        sessionsCompleted: weeklyCompleted.length,
+        totalEarnings:     weeklyTotal,
+        sessionsCompleted: weeklyBookings.length,
         homeEarnings,
         clinicEarnings,
-        homePercent:   weeklyCompleted.length > 0 ? Math.round((homeVisits.length   / weeklyCompleted.length) * 100) : 0,
-        clinicPercent: weeklyCompleted.length > 0 ? Math.round((clinicSessions.length / weeklyCompleted.length) * 100) : 0,
+        homePercent:   weeklyBookings.length > 0 ? Math.round((homeVisits.length   / weeklyBookings.length) * 100) : 0,
+        clinicPercent: weeklyBookings.length > 0 ? Math.round((clinicSessions.length / weeklyBookings.length) * 100) : 0,
       },
       analytics: {
         totalPatients,
         successRate,
-        patientSatisfaction: doctor.rating * 20, // convert 0-5 to 0-100
-        bookingCompletion: totalBookings > 0
-          ? Math.round(((completedAll + weeklyBookings.filter(b => b.status === 'CONFIRMED').length) / totalBookings) * 100)
-          : 0,
+        patientSatisfaction: Math.round(doctor.rating * 20),
+        bookingCompletion: allBookings > 0 ? Math.round((allCompleted / allBookings) * 100) : 0,
       },
+      patientList,        // ← NEW: all patients with wallet balances
       appointments,
-      recentMessages: recentMessages.map(b => ({
-        id:           b.id,
-        patientName:  b.patient.fullName,
+      recentMessages: recentMsgs.map(b => ({
+        id:            b.id,
+        patientName:   b.patient.fullName,
         patientAvatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(b.patient.fullName)}&background=6b7280&color=fff&size=64`,
-        message:      b.notes ?? '',
-        time:         this.timeAgo(b.createdAt),
-        tag:          b.sessionType === 'HOME_VISIT' ? 'Home Visit' : 'Clinic Session',
+        message:       b.notes ?? '',
+        time:          this.timeAgo(b.createdAt),
+        tag:           b.sessionType === 'HOME_VISIT' ? 'Home Visit' : 'Clinic Session',
       })),
     };
   }
 
   private getExp(bio?: string | null): string {
-    const match = (bio ?? '').match(/(\d+)\s+years?/i);
-    return match ? `${match[1]} years exp.` : '5+ years exp.';
+    const m = (bio ?? '').match(/(\d+)\s+years?/i);
+    return m ? `${m[1]} years exp.` : '5+ years exp.';
+  }
+
+  private getCondition(hp: any): string {
+    if (!hp) return 'General Care';
+    if (hp.backPain)     return 'Back Pain';
+    if (hp.jointPain)    return 'Joint Pain';
+    if (hp.sportsInjury) return 'Sports Injury';
+    if (hp.neckIssues)   return 'Neck Issues';
+    return 'General Care';
   }
 
   private timeAgo(date: Date): string {
@@ -192,7 +178,7 @@ export class ProviderDashboardService {
     const mins = Math.floor(diff / 60_000);
     if (mins < 60)  return `${mins} min ago`;
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24)   return `${hrs} hour${hrs > 1 ? 's' : ''} ago`;
+    if (hrs < 24)   return `${hrs} hr${hrs > 1 ? 's' : ''} ago`;
     return `${Math.floor(hrs / 24)} day${Math.floor(hrs / 24) > 1 ? 's' : ''} ago`;
   }
 }

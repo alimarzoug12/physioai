@@ -139,6 +139,20 @@ export const api = {
     return response.json();
   },
 
+  getDoctorMe: async (token: string) => {
+    const response = await fetch(`${API_URL}/doctors/me`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Server error' }));
+      throw new Error(error.message || 'Failed to load doctor profile');
+    }
+    return response.json();
+  },
+
   getWallet: async (token: string) => {
     const res = await fetch(`${API_URL}/wallet/me`, {
       headers: { 'Authorization': `Bearer ${token}` },
@@ -216,4 +230,84 @@ export const api = {
     if (!res.ok) throw new Error('Failed to clear session');
     return res.json();
   },
+  getSlotsForDate: async (doctorId: string, date: string) => {
+    const res = await fetch(`${API_URL}/doctors/${doctorId}/slots?date=${date}`);
+    if (!res.ok) throw new Error('Failed to load slots');
+    return res.json();
+  },
+
+  validatePromo: async (code: string) => {
+    const res = await fetch(`${API_URL}/promos/validate?code=${encodeURIComponent(code)}`);
+    if (!res.ok) throw new Error('Failed to validate promo');
+    return res.json();
+  },
+
+  createBooking: async (token: string, dto: {
+    doctorId: string; slotId: string; sessionType: 'CLINIC' | 'HOME_VISIT';
+    durationMinutes: number; paymentMethod: string; promoCode?: string;
+    notes?: string; requirements?: string[]; totalAmount: number;
+  }) => {
+    const res = await fetch(`${API_URL}/bookings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(dto),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Booking failed' }));
+      throw new Error(err.message);
+    }
+    return res.json();
+  },
+
+  verifyEmail: async (email: string, code: string) => {
+  const response = await fetch(`${API_URL}/auth/verify-email`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ email, code }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Server error' }));
+    throw new Error(error.message || 'Verification failed');
+  }
+  return response.json();
+},
+
+resendVerification: async (email: string) => {
+  const response = await fetch(`${API_URL}/auth/resend-verification`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ email }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Server error' }));
+    throw new Error(error.message || 'Resend failed');
+  }
+  return response.json();
+},
+
+forgotPassword: async (email: string) => {
+  const response = await fetch(`${API_URL}/auth/forgot-password`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ email }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Server error' }));
+    throw new Error(error.message || 'Request failed');
+  }
+  return response.json();
+},
+
+resetPassword: async (token: string, newPassword: string) => {
+  const response = await fetch(`${API_URL}/auth/reset-password`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ token, newPassword }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Server error' }));
+    throw new Error(error.message || 'Reset failed');
+  }
+  return response.json();
+},
 };
