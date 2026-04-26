@@ -132,11 +132,11 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
   state: State = { data: null, loading: true, error: '' };
 
   async componentDidMount() {
-    const { token } = this.props;
-    if (!token) { this.setState({ loading: false }); return; }
+    // const { token } = this.props;
+    // if (!token) { this.setState({ loading: false }); return; }
     try {
-      const data = await api.getDashboard(token);
-      this.setState({ data, loading: false });
+      const data = await api.getDashboard();
+      this.setState({ data: data as any, loading: false });
     } catch (err: any) {
       this.setState({ error: err.message, loading: false });
     }

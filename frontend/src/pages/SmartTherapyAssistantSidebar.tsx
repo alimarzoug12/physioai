@@ -50,10 +50,10 @@ class SmartTherapyAssistantSidebar extends React.Component<Props, State> {
   };
 
   async componentDidMount() {
-    const token = localStorage.getItem('token');
-    if (!token) { this.setState({ loading: false, error: 'Not logged in' }); return; }
+    // const token = localStorage.getItem('token');
+    // if (!token) { this.setState({ loading: false, error: 'Not logged in' }); return; }
     try {
-      const doctor = await api.getDoctorMe(token);
+      const doctor = await api.getDoctorMe();
       this.setState({ doctor, loading: false });
     } catch (err: any) {
       this.setState({ error: err.message, loading: false });

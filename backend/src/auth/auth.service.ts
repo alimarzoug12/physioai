@@ -20,10 +20,10 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
-    private prisma:  PrismaService,
-    private jwtSvc:  JwtService,
-    private config:  ConfigService,
-  ) {}
+    private prisma: PrismaService,
+    private jwtSvc: JwtService,
+    private config: ConfigService,
+  ) { }
 
   // ─────────────────────────────────────────────────────────────────
   // MAILER — built inline, no separate MailService needed
@@ -100,7 +100,7 @@ export class AuthService {
     to: string, fullName: string, token: string,
   ): Promise<void> {
     const frontendUrl = this.config.get<string>('app.frontendUrl') || 'http://localhost:3000';
-    const resetUrl    = `${frontendUrl}/reset-password?token=${token}`;
+    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
 
     await this.sendMail(
       to,
@@ -156,7 +156,7 @@ export class AuthService {
   }
 
   private async generateRefreshToken(userId: string): Promise<string> {
-    const rawToken  = this.generateSecureToken();
+    const rawToken = this.generateSecureToken();
     const tokenHash = this.hashToken(rawToken);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -171,10 +171,10 @@ export class AuthService {
     // ✅ path:'/' so cookie is sent on ALL requests, not just /auth/refresh
     res.cookie('refresh_token', token, {
       httpOnly: true,
-      secure:   this.config.get('NODE_ENV') === 'production',
+      secure: this.config.get('NODE_ENV') === 'production',
       sameSite: 'lax',   // 'lax' works better in dev than 'strict'
-      maxAge:   7 * 24 * 60 * 60 * 1000,
-      path:     '/',     // ✅ FIXED: was '/auth/refresh' which blocked the cookie
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',     // ✅ FIXED: was '/auth/refresh' which blocked the cookie
     });
   }
 
@@ -187,10 +187,10 @@ export class AuthService {
     role: string; emailVerified: boolean;
   }) {
     return {
-      id:            user.id,
-      email:         user.email,
-      fullName:      user.fullName,
-      role:          user.role,
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
       emailVerified: user.emailVerified,
     };
   }
@@ -208,28 +208,28 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    const code         = this.generateCode();
-    const expiresAt    = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+    const code = this.generateCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
 
     const user = await this.prisma.user.create({
       data: {
-        email:                 dto.email,
+        email: dto.email,
         passwordHash,
-        fullName:              dto.fullName,
-        phone:                 dto.phone,
-        provider:              'email',
-        emailVerified:         false,
-        verificationCode:      code,
+        fullName: dto.fullName,
+        phone: dto.phone,
+        provider: 'email',
+        emailVerified: false,
+        verificationCode: code,
         verificationExpiresAt: expiresAt,
         ...(dto.healthProfile ? {
           healthProfile: {
             create: {
-              age:           dto.healthProfile.age,
-              gender:        dto.healthProfile.gender,
-              backPain:      dto.healthProfile.backPain      ?? false,
-              jointPain:     dto.healthProfile.jointPain     ?? false,
-              sportsInjury:  dto.healthProfile.sportsInjury  ?? false,
-              neckIssues:    dto.healthProfile.neckIssues    ?? false,
+              age: dto.healthProfile.age,
+              gender: dto.healthProfile.gender,
+              backPain: dto.healthProfile.backPain ?? false,
+              jointPain: dto.healthProfile.jointPain ?? false,
+              sportsInjury: dto.healthProfile.sportsInjury ?? false,
+              neckIssues: dto.healthProfile.neckIssues ?? false,
               activityLevel: dto.healthProfile.activityLevel,
             },
           },
@@ -246,7 +246,7 @@ export class AuthService {
     // Return pending — frontend shows verification modal
     return {
       pending: true,
-      email:   user.email,
+      email: user.email,
       message: 'Account created! Check your email for a 6-digit code.',
     };
   }
@@ -276,8 +276,8 @@ export class AuthService {
     await this.prisma.user.update({
       where: { email },
       data: {
-        emailVerified:         true,
-        verificationCode:      null,
+        emailVerified: true,
+        verificationCode: null,
         verificationExpiresAt: null,
       },
     });
@@ -292,15 +292,15 @@ export class AuthService {
 
   async resendVerification(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user)              throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException('User not found');
     if (user.emailVerified) throw new BadRequestException('Email is already verified');
 
-    const code      = this.generateCode();
+    const code = this.generateCode();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     await this.prisma.user.update({
       where: { email },
-      data:  { verificationCode: code, verificationExpiresAt: expiresAt },
+      data: { verificationCode: code, verificationExpiresAt: expiresAt },
     });
 
     await this.sendVerificationCodeEmail(email, user.fullName, code);
@@ -355,8 +355,27 @@ export class AuthService {
         }),
       );
     }
+    // if (!user.emailVerified) {
+    //   // Instead of hard-blocking, resend code and return special error
+    //   // so frontend can show verification modal
+    //   const code = this.generateCode();
+    //   const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    //   await this.prisma.user.update({
+    //     where: { email: dto.email },
+    //     data: { verificationCode: code, verificationExpiresAt: expiresAt },
+    //   });
+    //   this.sendVerificationEmail(user.email, user.fullName, code).catch(() => { });
 
-    const accessToken  = this.generateAccessToken(user.id, user.role);
+    //   throw new UnauthorizedException(
+    //     JSON.stringify({
+    //       code: 'EMAIL_NOT_VERIFIED',
+    //       email: user.email,
+    //       message: 'Please verify your email. A new code has been sent.',
+    //     }),
+    //   );
+    // }
+
+    const accessToken = this.generateAccessToken(user.id, user.role);
     const refreshToken = await this.generateRefreshToken(user.id);
     this.setRefreshTokenCookie(res, refreshToken);
 
@@ -380,8 +399,8 @@ export class AuthService {
     }
 
     const tokenHash = this.hashToken(rawToken);
-    const stored    = await this.prisma.refreshToken.findUnique({
-      where:   { tokenHash },
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
       include: { user: true },
     });
 
@@ -390,7 +409,7 @@ export class AuthService {
       this.logger.warn(`Refresh token reuse detected for userId: ${stored.userId}`);
       await this.prisma.refreshToken.updateMany({
         where: { userId: stored.userId },
-        data:  { revokedAt: new Date() },
+        data: { revokedAt: new Date() },
       });
       this.clearRefreshTokenCookie(res);
       throw new UnauthorizedException('Security alert: please log in again');
@@ -404,10 +423,10 @@ export class AuthService {
     // Rotate
     await this.prisma.refreshToken.update({
       where: { id: stored.id },
-      data:  { revokedAt: new Date() },
+      data: { revokedAt: new Date() },
     });
 
-    const accessToken     = this.generateAccessToken(stored.userId, stored.user.role);
+    const accessToken = this.generateAccessToken(stored.userId, stored.user.role);
     const newRefreshToken = await this.generateRefreshToken(stored.userId);
     this.setRefreshTokenCookie(res, newRefreshToken);
 
@@ -425,8 +444,8 @@ export class AuthService {
       const tokenHash = this.hashToken(rawToken);
       await this.prisma.refreshToken.updateMany({
         where: { tokenHash },
-        data:  { revokedAt: new Date() },
-      }).catch(() => {});
+        data: { revokedAt: new Date() },
+      }).catch(() => { });
     }
 
     this.clearRefreshTokenCookie(res);
@@ -436,7 +455,7 @@ export class AuthService {
   async logoutAll(userId: string, res: Response) {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
-      data:  { revokedAt: new Date() },
+      data: { revokedAt: new Date() },
     });
     this.clearRefreshTokenCookie(res);
     return { message: 'Logged out from all devices' };
@@ -455,12 +474,12 @@ export class AuthService {
     if (!user) return safeMsg;
     if (user.provider !== 'email') return safeMsg; // OAuth accounts can't reset password
 
-    const token     = this.generateSecureToken();
+    const token = this.generateSecureToken();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await this.prisma.user.update({
       where: { email },
-      data:  { resetToken: token, resetTokenExpiresAt: expiresAt },
+      data: { resetToken: token, resetTokenExpiresAt: expiresAt },
     });
 
     await this.sendPasswordResetEmail(email, user.fullName, token);
@@ -491,7 +510,7 @@ export class AuthService {
       where: { id: user.id },
       data: {
         passwordHash,
-        resetToken:          null,
+        resetToken: null,
         resetTokenExpiresAt: null,
       },
     });
@@ -499,8 +518,8 @@ export class AuthService {
     // Revoke all refresh tokens — force re-login everywhere
     await this.prisma.refreshToken.updateMany({
       where: { userId: user.id, revokedAt: null },
-      data:  { revokedAt: new Date() },
-    }).catch(() => {});
+      data: { revokedAt: new Date() },
+    }).catch(() => { });
 
     this.logger.log(`Password reset for: ${user.email}`);
     return { message: 'Password reset successfully. Please log in with your new password.' };
@@ -512,7 +531,7 @@ export class AuthService {
 
   async getMe(userId: string) {
     const user = await this.prisma.user.findUnique({
-      where:  { id: userId },
+      where: { id: userId },
       select: {
         id: true, email: true, fullName: true, phone: true,
         role: true, emailVerified: true, provider: true, createdAt: true,
@@ -536,7 +555,7 @@ export class AuthService {
       user = await this.prisma.user.create({
         data: {
           email, fullName,
-          passwordHash:  '',
+          passwordHash: '',
           provider,
           emailVerified: true,
         },
@@ -545,12 +564,12 @@ export class AuthService {
     } else if (!user.emailVerified) {
       await this.prisma.user.update({
         where: { id: user.id },
-        data:  { emailVerified: true },
+        data: { emailVerified: true },
       });
       user = { ...user, emailVerified: true };
     }
 
-    const accessToken  = this.generateAccessToken(user.id, user.role);
+    const accessToken = this.generateAccessToken(user.id, user.role);
     const refreshToken = await this.generateRefreshToken(user.id);
     this.setRefreshTokenCookie(res, refreshToken);
 
@@ -586,17 +605,17 @@ export class AuthService {
 
   async appleAuth(identityToken: string, fullName: string | undefined, res: Response) {
     try {
-      const client  = new JwksClient({ jwksUri: 'https://appleid.apple.com/auth/keys' });
+      const client = new JwksClient({ jwksUri: 'https://appleid.apple.com/auth/keys' });
       const decoded = jwt.decode(identityToken, { complete: true });
       if (!decoded || typeof decoded === 'string') {
         throw new UnauthorizedException('Invalid Apple token format');
       }
-      const key       = await client.getSigningKey(decoded.header.kid);
+      const key = await client.getSigningKey(decoded.header.kid);
       const publicKey = key.getPublicKey();
-      const payload   = jwt.verify(identityToken, publicKey, {
+      const payload = jwt.verify(identityToken, publicKey, {
         algorithms: ['RS256'],
-        audience:   this.config.get<string>('APPLE_CLIENT_ID'),
-        issuer:     'https://appleid.apple.com',
+        audience: this.config.get<string>('APPLE_CLIENT_ID'),
+        issuer: 'https://appleid.apple.com',
       }) as jwt.JwtPayload;
 
       if (!payload?.sub) throw new UnauthorizedException('Invalid Apple token payload');
@@ -622,14 +641,14 @@ export class AuthService {
         where: {
           OR: [
             { verificationExpiresAt: { lt: now }, emailVerified: false },
-            { resetTokenExpiresAt:   { lt: now } },
+            { resetTokenExpiresAt: { lt: now } },
           ],
         },
         data: {
-          verificationCode:      null,
+          verificationCode: null,
           verificationExpiresAt: null,
-          resetToken:            null,
-          resetTokenExpiresAt:   null,
+          resetToken: null,
+          resetTokenExpiresAt: null,
         },
       }),
     ]);

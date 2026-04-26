@@ -8,6 +8,7 @@ import {
 import { TiHome } from 'react-icons/ti';
 import { IoIosArrowBack, IoIosArrowForward } from 'react-icons/io';
 import { api } from '../services/api';
+import { paymentsApi } from '../services/payments';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => (
   <Icon className={className} />
@@ -50,6 +51,7 @@ interface WalletData {
 }
 
 interface State {
+  resolvedDoctorId: string;
   // Doctor
   doctor: DoctorInfo | null;
   loadingDoctor: boolean;
@@ -88,16 +90,16 @@ interface Props {
   doctorId?: string;
 }
 
-const DAYS        = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
 function buildCalendar(year: number, month: number) {
-  const firstDow     = new Date(year, month, 1).getDay();
-  const daysInMonth  = new Date(year, month + 1, 0).getDate();
-  const prevDays     = new Date(year, month, 0).getDate();
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const prevDays = new Date(year, month, 0).getDate();
   const cells: { day: number; faded: boolean }[] = [];
   for (let i = firstDow - 1; i >= 0; i--) cells.push({ day: prevDays - i, faded: true });
   for (let d = 1; d <= daysInMonth; d++)   cells.push({ day: d, faded: false });
@@ -110,6 +112,28 @@ function toDateString(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+function getPeriod(timeStr: string): 'morning' | 'afternoon' | 'evening' {
+  // handles "10:00 AM", "2:30 PM", "09:00", "14:30"
+  const upper = timeStr.toUpperCase();
+
+  if (upper.includes('AM')) {
+    const hour = parseInt(timeStr);
+    return hour < 12 ? 'morning' : 'morning';
+  }
+
+  if (upper.includes('PM')) {
+    const hour = parseInt(timeStr);
+    if (hour === 12 || hour < 5) return 'afternoon';
+    return 'evening';
+  }
+
+  // 24-hour format fallback
+  const hour = parseInt(timeStr.split(':')[0]);
+  if (hour < 12) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
+}
+
 // ── Component ──────────────────────────────────────────────────────
 class BookSession extends React.Component<Props, State> {
   private today = new Date();
@@ -117,66 +141,94 @@ class BookSession extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
-      doctor:             null,
-      loadingDoctor:      true,
-      slots:              [],
-      loadingSlots:       false,
-      wallet:             null,
-      promoResult:        null,
-      promoLoading:       false,
-      selectedDate:       this.today,
-      selectedSlotId:     '',
-      selectedSlotTime:   '',
-      sessionType:        'clinic',
-      sessionDuration:    '60',
-      paymentMethod:      'wallet',
-      showPromo:          false,
-      promoCode:          '',
-      notes:              '',
-      agreedTerms:        false,
-      agreedHealth:       false,
-      checkedReqs:        [],
-      calendarYear:       this.today.getFullYear(),
+      resolvedDoctorId: '',
+      doctor: null,
+      loadingDoctor: true,
+      slots: [],
+      loadingSlots: false,
+      wallet: null,
+      promoResult: null,
+      promoLoading: false,
+      selectedDate: this.today,
+      selectedSlotId: '',
+      selectedSlotTime: '',
+      sessionType: 'clinic',
+      sessionDuration: '60',
+      paymentMethod: 'wallet',
+      showPromo: false,
+      promoCode: '',
+      notes: '',
+      agreedTerms: false,
+      agreedHealth: false,
+      checkedReqs: [],
+      calendarYear: this.today.getFullYear(),
       calendarMonthIndex: this.today.getMonth(),
-      submitting:         false,
-      submitError:        '',
-      submitSuccess:      false,
+      submitting: false,
+      submitError: '',
+      submitSuccess: false,
     };
   }
 
   async componentDidMount() {
-    const { doctorId } = this.props;
-    const token = localStorage.getItem('token') ?? '';
+    let doctorId = this.props.doctorId ?? '';
 
-    const promises: Promise<any>[] = [
-      api.getWallet(token).catch(() => null),
-    ];
-
-    if (doctorId) {
-      promises.unshift(api.getDoctorById(doctorId).catch(() => null));
+    if (!doctorId) {
+      try {
+        const doctors = await api.getDoctors();
+        if (doctors?.length > 0) doctorId = doctors[0].id;
+      } catch { }
     }
 
-    const results = await Promise.all(doctorId ? promises : [null, ...promises.slice(0)]);
-    const doctor  = doctorId ? results[0] : null;
-    const wallet  = results[doctorId ? 1 : 0];
+    const token = localStorage.getItem('token') ?? '';
+    const [doctorData, walletData] = await Promise.all([
+      doctorId ? api.getDoctorById(doctorId).catch(() => null) : Promise.resolve(null),
+      api.getWallet(token).catch(() => null),
+    ]);
 
-    this.setState({ doctor, wallet, loadingDoctor: false }, () => {
-      // Load slots for today automatically
-      if (doctorId) this.loadSlotsForDate(this.today);
-    });
+    this.setState(
+      { doctor: doctorData, wallet: walletData, loadingDoctor: false, resolvedDoctorId: doctorId },
+      () => { if (doctorId) this.loadSlotsForDate(this.today); }
+    );
   }
 
   loadSlotsForDate = async (date: Date) => {
-    const { doctorId } = this.props;
-    if (!doctorId) return;
+    const doctorId = this.props.doctorId || this.state.resolvedDoctorId;
+    if (!doctorId) {
+      console.error('❌ No doctorId available');
+      return;
+    }
 
     const dateStr = toDateString(date.getFullYear(), date.getMonth(), date.getDate());
     this.setState({ loadingSlots: true, selectedSlotId: '', selectedSlotTime: '' });
 
     try {
-      const slots = await api.getSlotsForDate(doctorId, dateStr);
+      const token = localStorage.getItem('token') ?? '';
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/doctors/${doctorId}/slots?date=${dateStr}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+
+      console.log('Slots response:', response.status, 'for date:', dateStr);
+
+      if (!response.ok) { this.setState({ slots: [], loadingSlots: false }); return; }
+
+      const rawSlots = await response.json();
+      console.log('Raw slots:', rawSlots);
+
+      const slots: SlotData[] = (rawSlots || []).map((slot: any) => {
+        const timeStr = slot.startTime || slot.time || '';
+        return {
+          id: slot.id,
+          time: timeStr,
+          endTime: slot.endTime || '',
+          status: slot.isBooked ? 'booked' : 'available',
+          period: getPeriod(timeStr),
+        };
+      });
+
       this.setState({ slots, loadingSlots: false });
-    } catch {
+    } catch (err) {
+      console.error('Slots error:', err);
       this.setState({ slots: [], loadingSlots: false });
     }
   };
@@ -226,9 +278,9 @@ class BookSession extends React.Component<Props, State> {
   // ── Pricing ────────────────────────────────────────────────────
   getSessionFee(): number {
     const { doctor, sessionType, sessionDuration } = this.state;
-    const base      = doctor?.pricePerSession ?? 200;
+    const base = doctor?.pricePerSession ?? 200;
     const homeExtra = sessionType === 'home' ? 80 : 0;
-    const durExtra  = sessionDuration === '90' ? 100 : 0;
+    const durExtra = sessionDuration === '90' ? 100 : 0;
     return base + homeExtra + durExtra;
   }
 
@@ -245,31 +297,101 @@ class BookSession extends React.Component<Props, State> {
   }
 
   // ── Submit ─────────────────────────────────────────────────────
+  // Replace handleSubmit in BookSession.tsx
+
+  // handleSubmit = async () => {
+  //   const {
+  //     doctor, selectedSlotId, sessionType, sessionDuration,
+  //     paymentMethod, promoResult, notes, checkedReqs,
+  //   } = this.state;
+  //   if (!doctor || !selectedSlotId) return;
+
+  //   // ✅ get token here (used below)
+  //   const token = localStorage.getItem('token') ?? '';
+  //   this.setState({ submitting: true, submitError: '' });
+
+  //   try {
+  //     // ✅ pass token as second argument
+  //     const booking = await api.createBooking({
+  //       doctorId: doctor.id,
+  //       slotId: selectedSlotId,
+  //       sessionType: sessionType === 'clinic' ? 'CLINIC' : 'HOME_VISIT',
+  //       durationMinutes: parseInt(sessionDuration, 10),
+  //       paymentMethod,
+  //       promoCode: promoResult?.valid ? promoResult.code : undefined,
+  //       notes,
+  //       requirements: checkedReqs,
+  //       totalAmount: this.getTotal(),
+  //     }, token);  // ✅ second argument
+
+  //     if (paymentMethod === 'cash' || paymentMethod === 'wallet') {
+  //       this.setState({ submitting: false, submitSuccess: true });
+  //       setTimeout(() => this.props.navigate?.('/sessions'), 1500);
+  //       return;
+  //     }
+
+  //     const charge = await paymentsApi.createCharge({
+  //       bookingId: booking.bookingId,
+  //       amount: this.getTotal(),
+  //       currency: 'QAR',
+  //       description: `PhysioAI session with Dr. ${doctor.fullName}`,
+  //     });
+
+  //     if (charge.paymentUrl) {
+  //       window.location.href = charge.paymentUrl;
+  //     } else {
+  //       throw new Error('Payment URL not received from payment provider');
+  //     }
+  //   } catch (err: any) {
+  //     this.setState({ submitting: false, submitError: err.message });
+  //   }
+  // };
+
   handleSubmit = async () => {
     const {
       doctor, selectedSlotId, sessionType, sessionDuration,
       paymentMethod, promoResult, notes, checkedReqs,
     } = this.state;
+
     if (!doctor || !selectedSlotId) return;
 
-    const token = localStorage.getItem('token') ?? '';
     this.setState({ submitting: true, submitError: '' });
 
     try {
-      await api.createBooking(token, {
-        doctorId:        doctor.id,
-        slotId:          selectedSlotId,
-        sessionType:     sessionType === 'clinic' ? 'CLINIC' : 'HOME_VISIT',
+      // ✅ No token argument — apiFetch handles auth automatically
+      const booking = await api.createBooking({
+        doctorId: doctor.id,
+        slotId: selectedSlotId,
+        sessionType: sessionType === 'clinic' ? 'CLINIC' : 'HOME_VISIT',
         durationMinutes: parseInt(sessionDuration, 10),
         paymentMethod,
-        promoCode:       promoResult?.valid ? promoResult.code : undefined,
+        promoCode: promoResult?.valid ? promoResult.code : undefined,
         notes,
-        requirements:    checkedReqs,
-        totalAmount:     this.getTotal(),
+        requirements: checkedReqs,
+        totalAmount: this.getTotal(),
       });
-      this.setState({ submitting: false, submitSuccess: true });
-      // Navigate to sessions after short delay
-      setTimeout(() => this.props.navigate?.('/sessions'), 1500);
+
+      // Wallet or cash — already confirmed by backend, go to sessions
+      if (!booking.requiresPayment) {
+        this.setState({ submitting: false, submitSuccess: true });
+        setTimeout(() => this.props.navigate?.('/sessions'), 1500);
+        return;
+      }
+
+      // Card payment — redirect to Stripe checkout
+      const charge = await paymentsApi.createCharge({
+        bookingId: booking.bookingId,
+        amount: this.getTotal(),
+        currency: 'QAR',
+        description: `PhysioAI session with Dr. ${doctor.fullName}`,
+      });
+
+      if (charge.paymentUrl) {
+        window.location.href = charge.paymentUrl;
+      } else {
+        throw new Error('Payment URL not received. Please try again.');
+      }
+
     } catch (err: any) {
       this.setState({ submitting: false, submitError: err.message });
     }
@@ -287,33 +409,33 @@ class BookSession extends React.Component<Props, State> {
     } = this.state;
 
     // ── Display values (DB or fallback) ───────────────────────────
-    const doctorName     = doctor ? `Dr. ${doctor.fullName}` : 'Dr. Sarah Al-Mahmoud';
-    const doctorSpecialty = doctor?.specialty   ?? 'Musculoskeletal Physiotherapist';
-    const doctorRating   = doctor?.rating       ?? 4.9;
-    const doctorPrice    = doctor?.pricePerSession ?? 200;
-    const doctorExp      = doctor?.experience   ?? '8 years exp';
-    const doctorCenter   = doctor?.centerName   ?? 'Al Sadd Medical Center';
-    const isOnline       = doctor?.isAvailable  ?? true;
-    const doctorAvatar   = doctor?.avatarUrl
+    const doctorName = doctor ? `Dr. ${doctor.fullName}` : 'Dr. Sarah Al-Mahmoud';
+    const doctorSpecialty = doctor?.specialty ?? 'Musculoskeletal Physiotherapist';
+    const doctorRating = doctor?.rating ?? 4.9;
+    const doctorPrice = doctor?.pricePerSession ?? 200;
+    const doctorExp = doctor?.experience ?? '8 years exp';
+    const doctorCenter = doctor?.centerName ?? 'Al Sadd Medical Center';
+    const isOnline = doctor?.isAvailable ?? true;
+    const doctorAvatar = doctor?.avatarUrl
       ?? 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80';
-    const walletBalance  = wallet?.balance  ?? 0;
-    const currency       = wallet?.currency ?? 'QAR';
+    const walletBalance = wallet?.balance ?? 0;
+    const currency = wallet?.currency ?? 'QAR';
 
-    const sessionFee    = this.getSessionFee();
-    const platformFee   = this.getPlatformFee();
-    const discount      = this.getDiscount();
-    const totalAmount   = this.getTotal();
-    const canContinue   = selectedSlotId && agreedTerms && agreedHealth && !submitting;
+    const sessionFee = this.getSessionFee();
+    const platformFee = this.getPlatformFee();
+    const discount = this.getDiscount();
+    const totalAmount = this.getTotal();
+    const canContinue = selectedSlotId && agreedTerms && agreedHealth && !submitting;
 
     // Group slots by period
     const slotsByPeriod = {
-      morning:   slots.filter(s => s.period === 'morning'),
+      morning: slots.filter(s => s.period === 'morning'),
       afternoon: slots.filter(s => s.period === 'afternoon'),
-      evening:   slots.filter(s => s.period === 'evening'),
+      evening: slots.filter(s => s.period === 'evening'),
     };
 
     const calendarCells = buildCalendar(calendarYear, calendarMonthIndex);
-    const selectedDay   = selectedDate.getDate();
+    const selectedDay = selectedDate.getDate();
     const isSelectedMonth =
       selectedDate.getMonth() === calendarMonthIndex &&
       selectedDate.getFullYear() === calendarYear;
@@ -341,11 +463,10 @@ class BookSession extends React.Component<Props, State> {
             {['Date & Time', 'Payment', 'Confirm'].map((label, i) => (
               <React.Fragment key={label}>
                 <div className="flex items-center gap-2">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${
-                    i === 0
-                      ? 'bg-gradient-to-br from-blue-500 to-green-300 text-white'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}>{i + 1}</div>
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${i === 0
+                    ? 'bg-gradient-to-br from-blue-500 to-green-300 text-white'
+                    : 'bg-gray-200 text-gray-500'
+                    }`}>{i + 1}</div>
                   <span className={`text-xl ${i === 0 ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
                     {label}
                   </span>
@@ -433,9 +554,8 @@ class BookSession extends React.Component<Props, State> {
                 <button
                   key={opt.id}
                   onClick={() => this.setState({ sessionType: opt.id })}
-                  className={`w-full flex items-center gap-4 p-6 rounded-2xl border-2 transition ${
-                    selected ? `${opt.border} ${opt.bg}` : 'border-gray-100 bg-white'
-                  }`}
+                  className={`w-full flex items-center gap-4 p-6 rounded-2xl border-2 transition ${selected ? `${opt.border} ${opt.bg}` : 'border-gray-100 bg-white'
+                    }`}
                 >
                   <div className={`w-16 h-16 rounded-full ${opt.iconBg} flex items-center justify-center text-white text-2xl`}>
                     <IconWrapper icon={opt.icon} />
@@ -447,9 +567,8 @@ class BookSession extends React.Component<Props, State> {
                   </div>
                   <div className="text-right">
                     <div className="font-bold text-2xl">{opt.price} {currency}</div>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mt-2 ml-auto ${
-                      selected ? `${opt.checkBg} border-transparent` : 'border-gray-300'
-                    }`}>
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mt-2 ml-auto ${selected ? `${opt.checkBg} border-transparent` : 'border-gray-300'
+                      }`}>
                       {selected && <IconWrapper icon={FaCheck} className="text-white text-xs" />}
                     </div>
                   </div>
@@ -482,19 +601,18 @@ class BookSession extends React.Component<Props, State> {
             ))}
             {calendarCells.map((cell, idx) => {
               const isSelected = isSelectedMonth && cell.day === selectedDay && !cell.faded;
-              const isPast     = !cell.faded && new Date(calendarYear, calendarMonthIndex, cell.day) < new Date(this.today.getFullYear(), this.today.getMonth(), this.today.getDate());
+              const isPast = !cell.faded && new Date(calendarYear, calendarMonthIndex, cell.day) < new Date(this.today.getFullYear(), this.today.getMonth(), this.today.getDate());
               return (
                 <button
                   key={idx}
                   disabled={cell.faded || isPast}
                   onClick={() => !cell.faded && !isPast && this.selectDate(cell.day)}
-                  className={`py-5 rounded-xl text-xl font-medium transition ${
-                    isSelected
-                      ? 'bg-gradient-to-r from-blue-500 to-green-400 text-white font-bold'
-                      : cell.faded || isPast
-                        ? 'text-gray-300 cursor-default'
-                        : 'text-gray-700 hover:bg-gray-100'
-                  }`}
+                  className={`py-5 rounded-xl text-xl font-medium transition ${isSelected
+                    ? 'bg-gradient-to-r from-blue-500 to-green-400 text-white font-bold'
+                    : cell.faded || isPast
+                      ? 'text-gray-300 cursor-default'
+                      : 'text-gray-700 hover:bg-gray-100'
+                    }`}
                 >
                   {cell.day}
                 </button>
@@ -517,9 +635,9 @@ class BookSession extends React.Component<Props, State> {
             </p>
           ) : (
             [
-              { label: 'Morning',   icon: FaSun,  iconClass: 'text-yellow-400 text-2xl', slots: slotsByPeriod.morning   },
-              { label: 'Afternoon', icon: FaSun,  iconClass: 'text-orange-400 text-2xl', slots: slotsByPeriod.afternoon },
-              { label: 'Evening',   icon: FaMoon, iconClass: 'text-indigo-400 text-2xl', slots: slotsByPeriod.evening   },
+              { label: 'Morning', icon: FaSun, iconClass: 'text-yellow-400 text-2xl', slots: slotsByPeriod.morning },
+              { label: 'Afternoon', icon: FaSun, iconClass: 'text-orange-400 text-2xl', slots: slotsByPeriod.afternoon },
+              { label: 'Evening', icon: FaMoon, iconClass: 'text-indigo-400 text-2xl', slots: slotsByPeriod.evening },
             ].map(({ label, icon, iconClass, slots: periodSlots }) =>
               periodSlots.length > 0 && (
                 <div key={label} className="mb-6">
@@ -533,16 +651,15 @@ class BookSession extends React.Component<Props, State> {
                         key={slot.id}
                         disabled={slot.status === 'booked'}
                         onClick={() => slot.status !== 'booked' && this.setState({
-                          selectedSlotId:   slot.id,
+                          selectedSlotId: slot.id,
                           selectedSlotTime: slot.time,
                         })}
-                        className={`py-4 rounded-xl text-center transition ${
-                          slot.status === 'booked'
-                            ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
-                            : selectedSlotId === slot.id
-                              ? 'bg-gradient-to-r from-blue-500 to-green-400 text-white shadow-lg'
-                              : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                        }`}
+                        className={`py-4 rounded-xl text-center transition ${slot.status === 'booked'
+                          ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
+                          : selectedSlotId === slot.id
+                            ? 'bg-gradient-to-r from-blue-500 to-green-400 text-white shadow-lg'
+                            : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                          }`}
                       >
                         <div className="font-semibold text-xl">{slot.time}</div>
                         <div className="text-lg mt-0.5">
@@ -562,17 +679,16 @@ class BookSession extends React.Component<Props, State> {
           <h3 className="text-2xl font-bold text-gray-900 mb-4">Session Duration</h3>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { value: '60' as const, label: '60 Minutes', sub: 'Standard session',  extra: null,          iconBg: 'from-blue-500 to-blue-100',   checkBg: 'bg-blue-500',   border: 'border-blue-500',   gradBg: 'from-blue-50'   },
-              { value: '90' as const, label: '90 Minutes', sub: 'Extended session',  extra: '+100 QAR',    iconBg: 'from-purple-500 to-pink-400', checkBg: 'bg-purple-500', border: 'border-purple-500', gradBg: 'from-purple-50' },
+              { value: '60' as const, label: '60 Minutes', sub: 'Standard session', extra: null, iconBg: 'from-blue-500 to-blue-100', checkBg: 'bg-blue-500', border: 'border-blue-500', gradBg: 'from-blue-50' },
+              { value: '90' as const, label: '90 Minutes', sub: 'Extended session', extra: '+100 QAR', iconBg: 'from-purple-500 to-pink-400', checkBg: 'bg-purple-500', border: 'border-purple-500', gradBg: 'from-purple-50' },
             ].map(opt => {
               const selected = sessionDuration === opt.value;
               return (
                 <button
                   key={opt.value}
                   onClick={() => this.setState({ sessionDuration: opt.value })}
-                  className={`p-6 border-2 rounded-2xl text-center transition ${
-                    selected ? `${opt.border} bg-gradient-to-r ${opt.gradBg} to-white` : 'border-gray-100'
-                  }`}
+                  className={`p-6 border-2 rounded-2xl text-center transition ${selected ? `${opt.border} bg-gradient-to-r ${opt.gradBg} to-white` : 'border-gray-100'
+                    }`}
                 >
                   <div className={`w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center text-white text-2xl bg-gradient-to-br ${opt.iconBg}`}>
                     <IconWrapper icon={FaClock} />
@@ -580,9 +696,8 @@ class BookSession extends React.Component<Props, State> {
                   <div className="font-bold text-gray-900 text-2xl">{opt.label}</div>
                   <div className="text-xl text-gray-500 mt-1">{opt.sub}</div>
                   {opt.extra && <div className="text-green-500 text-xl font-medium mt-1">{opt.extra}</div>}
-                  <div className={`w-7 h-7 rounded-full mx-auto mt-3 flex items-center justify-center ${
-                    selected ? opt.checkBg : 'border-2 border-gray-300'
-                  }`}>
+                  <div className={`w-7 h-7 rounded-full mx-auto mt-3 flex items-center justify-center ${selected ? opt.checkBg : 'border-2 border-gray-300'
+                    }`}>
                     {selected && <IconWrapper icon={FaCheck} className="text-white text-lg" />}
                   </div>
                 </button>
@@ -626,19 +741,18 @@ class BookSession extends React.Component<Props, State> {
           <h3 className="text-2xl font-bold text-gray-900 mb-4">Payment Method</h3>
           <div className="space-y-5">
             {[
-              { id: 'wallet', icon: FaWallet,            bg: 'bg-green-500',  label: 'Physio AI Wallet',  sub: `Balance: ${walletBalance.toLocaleString()} ${currency}` },
-              { id: 'card',   icon: FaCreditCard,         bg: 'bg-blue-600',   label: 'Credit/Debit Card', sub: 'Visa, Mastercard accepted'      },
-              { id: 'sadad',  icon: FaMobileScreenButton, bg: 'bg-purple-600', label: 'Sadad Payment',     sub: "Qatar's national payment system" },
-              { id: 'cash',   icon: FaMoneyBillWave,      bg: 'bg-gray-800',   label: 'Cash Payment',      sub: 'Pay at the clinic'              },
+              { id: 'wallet', icon: FaWallet, bg: 'bg-green-500', label: 'Physio AI Wallet', sub: `Balance: ${walletBalance.toLocaleString()} ${currency}` },
+              { id: 'card', icon: FaCreditCard, bg: 'bg-blue-600', label: 'Credit/Debit Card', sub: 'Visa, Mastercard accepted' },
+              { id: 'sadad', icon: FaMobileScreenButton, bg: 'bg-purple-600', label: 'Sadad Payment', sub: "Qatar's national payment system" },
+              { id: 'cash', icon: FaMoneyBillWave, bg: 'bg-gray-800', label: 'Cash Payment', sub: 'Pay at the clinic' },
             ].map(method => (
               <label
                 key={method.id}
                 onClick={() => this.setState({ paymentMethod: method.id })}
-                className={`flex items-center gap-5 p-6 rounded-2xl border-2 cursor-pointer transition ${
-                  paymentMethod === method.id
-                    ? 'border-blue-500 bg-gradient-to-r from-blue-50 to-green-50'
-                    : 'border-gray-100'
-                }`}
+                className={`flex items-center gap-5 p-6 rounded-2xl border-2 cursor-pointer transition ${paymentMethod === method.id
+                  ? 'border-blue-500 bg-gradient-to-r from-blue-50 to-green-50'
+                  : 'border-gray-100'
+                  }`}
               >
                 <div className={`w-16 h-16 rounded-full ${method.bg} flex items-center justify-center text-white text-xl`}>
                   <span className="text-2xl"><IconWrapper icon={method.icon} /></span>
@@ -647,9 +761,8 @@ class BookSession extends React.Component<Props, State> {
                   <div className="font-bold text-gray-900 text-2xl">{method.label}</div>
                   <div className="text-xl text-gray-500">{method.sub}</div>
                 </div>
-                <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center ${
-                  paymentMethod === method.id ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
-                }`}>
+                <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center ${paymentMethod === method.id ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
+                  }`}>
                   {paymentMethod === method.id && <IconWrapper icon={FaCheck} className="text-white text-lg" />}
                 </div>
               </label>
@@ -687,14 +800,12 @@ class BookSession extends React.Component<Props, State> {
                 </button>
               </div>
               {promoResult && (
-                <div className={`flex items-center gap-2 mt-3 rounded-xl p-4 border-2 ${
-                  promoResult.valid
-                    ? 'bg-green-50 border-green-300'
-                    : 'bg-red-50 border-red-300'
-                }`}>
-                  <span className={`w-6 h-6 rounded-full text-white text-lg flex items-center justify-center ${
-                    promoResult.valid ? 'bg-green-500' : 'bg-red-500'
+                <div className={`flex items-center gap-2 mt-3 rounded-xl p-4 border-2 ${promoResult.valid
+                  ? 'bg-green-50 border-green-300'
+                  : 'bg-red-50 border-red-300'
                   }`}>
+                  <span className={`w-6 h-6 rounded-full text-white text-lg flex items-center justify-center ${promoResult.valid ? 'bg-green-500' : 'bg-red-500'
+                    }`}>
                     {promoResult.valid ? <IconWrapper icon={FaCheck} /> : '✕'}
                   </span>
                   <span className={`text-xl font-medium ${promoResult.valid ? 'text-green-600' : 'text-red-500'}`}>
@@ -815,7 +926,7 @@ class BookSession extends React.Component<Props, State> {
 }
 
 function BookSessionWithRouter() {
-  const navigate  = useNavigate();
+  const navigate = useNavigate();
   const { doctorId } = useParams<{ doctorId?: string }>();
   return <BookSession navigate={navigate as any} doctorId={doctorId} />;
 }

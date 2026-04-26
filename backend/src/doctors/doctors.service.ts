@@ -131,25 +131,26 @@ export class DoctorsService {
     }));
   }
 
-  async getSlotsForDate(doctorId: string, dateStr: string) {
-    const date = new Date(dateStr);
-    const dayStart = new Date(date); dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(date); dayEnd.setHours(23, 59, 59, 999);
+  async getSlotsForDate(doctorId: string, date: string) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
 
     const slots = await this.prisma.slot.findMany({
       where: {
         doctorId,
-        date: { gte: dayStart, lte: dayEnd },
+        date: { gte: start, lte: end },
       },
       orderBy: { startTime: 'asc' },
     });
 
-    return slots.map(s => ({
-      id: s.id,
-      time: s.startTime,
-      endTime: s.endTime,
-      status: s.isBooked ? 'booked' : 'available',
-      period: this.getPeriod(s.startTime),
+    return slots.map(slot => ({
+      id: slot.id,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      isBooked: slot.isBooked,
+      status: slot.isBooked ? 'booked' : 'available',
     }));
   }
 

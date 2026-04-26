@@ -92,11 +92,11 @@ class SessionOverview extends React.Component<Props, State> {
   };
 
   async componentDidMount() {
-    const { token } = this.props;
-    if (!token) { this.setState({ loading: false }); return; }
+    // const { token } = this.props;
+    // if (!token) { this.setState({ loading: false }); return; }
     try {
-      const data = await api.getSessions(token);
-      this.setState({ data, loading: false });
+      const data = await api.getSessions();
+      this.setState({ data: data as any, loading: false });
     } catch (err: any) {
       this.setState({ error: err.message, loading: false });
     }

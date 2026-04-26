@@ -19,4 +19,12 @@ export default () => ({
   cookie: {
     secret: process.env.COOKIE_SECRET || '',
   },
+  payment: {
+    provider:           process.env.PAYMENT_PROVIDER        || 'stripe',
+    stripeSecretKey:    process.env.STRIPE_SECRET_KEY       || '',
+    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET  || '',
+    tapSecretKey:       process.env.TAP_SECRET_KEY          || '',
+    tapPublicKey:       process.env.TAP_PUBLIC_KEY          || '',
+    tapWebhookSecret:   process.env.TAP_WEBHOOK_SECRET      || '',
+  },
 });

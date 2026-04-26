@@ -11,6 +11,12 @@ const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min
 
 async function main() {
   console.log('🌱 Starting rich seed...');
+//this makes all the user accounts verified to avoid email verification step during testing and development******
+  await prisma.user.updateMany({
+    where: { emailVerified: false },
+    data: { emailVerified: true },
+  });
+  console.log('✅ All existing users marked as verified');
 
   // ── 1. Centers ─────────────────────────────────────────────────
   const center1 = await prisma.center.create({
@@ -413,6 +419,151 @@ async function main() {
     },
   });
   console.log('✅ Transactions created (rich dataset)');
+
+  // ── 11. Real email test accounts ──────────────────────────────────
+  console.log('🌱 Creating real email test accounts...');
+
+  const realPwd = await bcrypt.hash('Test1234!', 10);
+
+  const realUsers = [
+    { email: 'alimarzoug2725@gmail.com', fullName: 'Ali Marzoug', phone: '+974 5557 0001' },
+    { email: 'ali.marzoug15@gmail.com', fullName: 'Ali Marzoug Alt', phone: '+974 5557 0002' },
+  ];
+
+  for (const ru of realUsers) {
+    // Check if already exists (in case seed is re-run partially)
+    const existing = await prisma.user.findUnique({ where: { email: ru.email } });
+    if (existing) { console.log(`⚠️  ${ru.email} already exists, skipping`); continue; }
+
+    const realUser = await prisma.user.create({
+      data: {
+        email: ru.email,
+        passwordHash: realPwd,
+        fullName: ru.fullName,
+        role: 'PATIENT',
+        phone: ru.phone,
+        emailVerified: true,           // ✅ pre-verified so no email needed
+        provider: 'email',
+        healthProfile: {
+          create: {
+            age: '26-35', gender: 'male',
+            backPain: true, activityLevel: 'Moderate',
+          },
+        },
+      },
+    });
+
+    // Wallet with real balance
+    const wallet = await prisma.wallet.create({
+      data: {
+        userId: realUser.id,
+        balance: 2500.00,
+        currency: 'QAR',
+        rewards: { create: { points: 2500 } },
+      },
+    });
+
+    // Transactions
+    const txTemplates = [
+      { type: 'CREDIT', category: 'TOP_UP', title: 'Wallet Top-up', subtitle: 'Bank Transfer', amount: 500 },
+      { type: 'DEBIT', category: 'SESSION', title: 'Dr. Sarah Al-Rashid', subtitle: 'Physiotherapy Session', amount: -180 },
+      { type: 'CREDIT', category: 'TOP_UP', title: 'Wallet Top-up', subtitle: 'Card Payment', amount: 1000 },
+      { type: 'DEBIT', category: 'SESSION', title: 'Dr. Ahmed Hassan', subtitle: 'Spine Care Session', amount: -160 },
+      { type: 'CREDIT', category: 'REFERRAL', title: 'Referral Bonus', subtitle: 'Friend joined Physio AI', amount: 50 },
+      { type: 'DEBIT', category: 'HOME_VISIT', title: 'Home Visit Session', subtitle: 'Dr. Omar Khalil', amount: -250 },
+    ];
+    for (let i = 0; i < txTemplates.length; i++) {
+      const t = txTemplates[i];
+      await prisma.transaction.create({
+        data: {
+          walletId: wallet.id,
+          type: t.type as any,
+          category: t.category as any,
+          title: t.title,
+          subtitle: t.subtitle,
+          amount: t.amount,
+          status: 'COMPLETED',
+          createdAt: past(i + 1),
+        },
+      });
+    }
+
+    // Payment method
+    await prisma.paymentMethod.create({
+      data: {
+        userId: realUser.id,
+        type: 'CARD',
+        label: 'Primary Visa Card',
+        sublabel: '•••• •••• •••• 4532',
+        last4: '4532',
+        expiry: '12/26',
+        holderName: ru.fullName,
+        provider: 'visa',
+        isDefault: true,
+      },
+    });
+
+    // Past bookings (completed sessions)
+    const docForBooking = d1.doctor!.id;
+    const availablePastSlots = createdSlots.filter(s =>
+      s.doctorId === docForBooking &&
+      new Date(s.date) < new Date() &&
+      !bookedSlotIds.has(s.id)
+    ).slice(0, 4);
+
+    for (const slot of availablePastSlots) {
+      bookedSlotIds.add(slot.id);
+      await prisma.booking.create({
+        data: {
+          patientId: realUser.id,
+          doctorId: docForBooking,
+          slotId: slot.id,
+          status: 'COMPLETED',
+          sessionType: 'CLINIC',
+          notes: 'Lower back pain treatment',
+          bookedVia: 'APP',
+          createdAt: past(rand(5, 30)),
+        },
+      });
+    }
+
+    // One upcoming confirmed booking
+    const upcomingSlot = createdSlots.find(s =>
+      s.doctorId === docForBooking &&
+      new Date(s.date) > new Date() &&
+      !s.isBooked &&
+      !bookedSlotIds.has(s.id)
+    );
+    if (upcomingSlot) {
+      bookedSlotIds.add(upcomingSlot.id);
+      await prisma.booking.create({
+        data: {
+          patientId: realUser.id,
+          doctorId: docForBooking,
+          slotId: upcomingSlot.id,
+          status: 'CONFIRMED',
+          sessionType: 'CLINIC',
+          notes: 'Follow-up session',
+          bookedVia: 'APP',
+        },
+      });
+    }
+
+    // Health insight
+    await prisma.healthInsight.create({
+      data: {
+        userId: realUser.id,
+        heartRate: 72,
+        dailySteps: 8547,
+        exerciseSessions: 5,
+        totalSessions: 5,
+        painLevel: 2.1,
+        sleepQuality: 8.3,
+      },
+    });
+
+    console.log(`✅ Real account created: ${ru.email} / Test1234!`);
+  }
 
   // ── Summary ────────────────────────────────────────────────────
   console.log('');

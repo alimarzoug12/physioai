@@ -32,6 +32,7 @@ model User {
   chatSessions     ChatSession[]
   refreshTokens    RefreshToken[]
   emailTokens      EmailToken[]
+  payments         Payment[]
 }
 
 enum Role {
@@ -97,7 +98,10 @@ model Booking {
   patient     User          @relation(fields: [patientId], references: [id])
   doctor      Doctor        @relation(fields: [doctorId], references: [id])
   slot        Slot          @relation(fields: [slotId], references: [id])
-}
+  totalAmount Float?
+  paidAt      DateTime?
+  payment     Payment?
+  }
 
 enum BookingStatus {
   PENDING
@@ -312,4 +316,33 @@ model EmailToken {
 enum EmailTokenType {
   EMAIL_VERIFICATION
   PASSWORD_RESET
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  bookingId       String        @unique
+  patientId       String
+  amount          Float
+  currency        String        @default("QAR")
+  status          PaymentStatus @default(PENDING)
+  provider        String        @default("tap")
+  providerChargeId String?      // Tap's charge ID
+  providerRefundId String?      // Tap's refund ID if refunded
+  paymentMethod   String?       // "card", "apple_pay", etc.
+  metadata        Json?         // raw provider response
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  redirectUrl     String?
+
+  booking         Booking       @relation(fields: [bookingId], references: [id])
+  patient         User          @relation(fields: [patientId], references: [id])
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
 }

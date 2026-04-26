@@ -16,6 +16,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { ProviderDashboardModule } from './provider-dashboard/provider-dashboard.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { ProviderDashboardModule } from './provider-dashboard/provider-dashboard
     SessionsModule,
     NotificationsModule,
     ProviderDashboardModule,
+    PaymentsModule,
   ],
   // NO AppController, NO AppService here
   providers: [PrismaService, TokenCleanupService],

@@ -17,7 +17,6 @@ import PhysioBookingFlowWithRouter from './pages/PhysioBookingFlow';
 import PatientHomeWithRouter from './pages/PatientHome';
 import PhysiotherapistDashboardHeader from './pages/PhysiotherapistDashboardHeader';
 import ProviderDashboardWithRouter from './pages/ProviderDashboard';
-import EmailVerificationBanner from './components/EmailVerificationBanner';
 
 import {
   authApi, tokenStore,
@@ -25,6 +24,7 @@ import {
 } from './services/auth';
 import VerifyEmail from './pages/VerifyEmail';
 import ResetPassword from './pages/ResetPassword';
+import PaymentCallback from './pages/PaymentCallback';
 interface State {
   showSplash:    boolean;
   authChecked:   boolean;
@@ -77,12 +77,12 @@ class App extends React.Component<{}, State> {
       <>
         <Router>
           <div className="app-container">
-            {/* <EmailVerificationBanner />  */}
             <Routes>
               <Route path="/" element={<WelcomePhysioAI />} />
               <Route path="/welcome" element={<WelcomeToPhysioAI />} />
               <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/payment/callback" element={<PaymentCallback />} />
 
               <Route path="/ai-assistant" element={isLoggedIn ? <AIAssistantCompleteFlowWithRouter /> : <Navigate to="/" />} />
               <Route path="/specialists" element={isLoggedIn ? <PhysioBookingFlowWithRouter /> : <Navigate to="/" />} />

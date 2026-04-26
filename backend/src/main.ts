@@ -37,7 +37,9 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app    = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true, // ← required for webhook signature verification
+  });
   const config = app.get(ConfigService);
 
   // ✅ Must be before any route handling
