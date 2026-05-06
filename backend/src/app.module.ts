@@ -17,6 +17,9 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { ProviderDashboardModule } from './provider-dashboard/provider-dashboard.module';
 import { PaymentsModule } from './payments/payments.module';
+import { SlotsModule } from './slots/slots.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -45,6 +48,9 @@ import { PaymentsModule } from './payments/payments.module';
     NotificationsModule,
     ProviderDashboardModule,
     PaymentsModule,
+    SlotsModule,
+    ReviewsModule,
+    UploadsModule,
   ],
   // NO AppController, NO AppService here
   providers: [PrismaService, TokenCleanupService],

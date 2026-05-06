@@ -463,7 +463,7 @@ class ProviderDashboard extends React.Component<ProviderDashboardProps, State> {
                 iconColor: 'text-blue-500',
                 label: 'Add Availability',
                 sub: 'Set new time slots',
-                onClick: () => this.props.navigate?.('/settings'),
+                onClick: () => this.props.navigate?.('/schedule'),
               },
               {
                 icon: FaChartLine,

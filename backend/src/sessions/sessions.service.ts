@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma.service';
 
 @Injectable()
 export class SessionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async getPatientSessions(userId: string) {
 
@@ -12,6 +12,7 @@ export class SessionsService {
       where: { patientId: userId },
       include: {
         slot: true,
+        review: true,
         doctor: {
           include: { user: true, center: true },
         },
@@ -20,9 +21,9 @@ export class SessionsService {
     });
 
     // ── Stats ──────────────────────────────────────────────
-    const totalSessions     = allBookings.length;
+    const totalSessions = allBookings.length;
     const completedSessions = allBookings.filter(b => b.status === 'COMPLETED').length;
-    const upcomingSessions  = allBookings.filter(b =>
+    const upcomingSessions = allBookings.filter(b =>
       b.status === 'PENDING' || b.status === 'CONFIRMED'
     ).length;
     const recoveryRate = totalSessions > 0
@@ -36,19 +37,19 @@ export class SessionsService {
     const upcoming = allBookings
       .filter(b => b.status === 'PENDING' || b.status === 'CONFIRMED')
       .map((b, index) => ({
-        id:       b.id,
-        num:      `#${totalSessions - index}`,
-        status:   b.status,
-        date:     b.slot.date,
+        id: b.id,
+        num: `#${totalSessions - index}`,
+        status: b.status,
+        date: b.slot.date,
         startTime: b.slot.startTime,
-        endTime:  b.slot.endTime,
+        endTime: b.slot.endTime,
         sessionType: b.sessionType,
-        notes:    b.notes,
+        notes: b.notes,
         doctor: {
-          fullName:   b.doctor.user.fullName,
-          specialty:  b.doctor.specialties[0] || '',
-          center:     b.doctor.center.name,
-          rating:     b.doctor.rating,
+          fullName: b.doctor.user.fullName,
+          specialty: b.doctor.specialties[0] || '',
+          center: b.doctor.center.name,
+          rating: b.doctor.rating,
           avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(b.doctor.user.fullName)}&background=3b82f6&color=fff&size=128`,
         },
       }));
@@ -57,19 +58,21 @@ export class SessionsService {
     const completed = allBookings
       .filter(b => b.status === 'COMPLETED')
       .map((b, index) => ({
-        id:          b.id,
-        num:         `#${completedSessions - index}`,
-        status:      b.status,
-        date:        b.slot.date,
-        startTime:   b.slot.startTime,
+        id: b.id,
+        num: `#${completedSessions - index}`,
+        status: b.status,
+        date: b.slot.date,
+        startTime: b.slot.startTime,
         sessionType: b.sessionType,
-        notes:       b.notes,
-        price:       `QAR ${b.doctor.pricePerSession}`,
+        notes: b.notes,
+        price: `QAR ${b.doctor.pricePerSession}`,
+        hasReview: !!(b as any).review,
         doctor: {
-          fullName:  b.doctor.user.fullName,
+          id: b.doctor.id,
+          fullName: b.doctor.user.fullName,
           specialty: b.doctor.specialties[0] || '',
-          center:    b.doctor.center.name,
-          rating:    b.doctor.rating,
+          center: b.doctor.center.name,
+          rating: b.doctor.rating,
           avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(b.doctor.user.fullName)}&background=3b82f6&color=fff&size=128`,
         },
       }));
@@ -91,10 +94,10 @@ export class SessionsService {
       upcoming,
       completed,
       healthInsight: healthInsight ? {
-        painLevel:    healthInsight.painLevel,
+        painLevel: healthInsight.painLevel,
         sleepQuality: healthInsight.sleepQuality,
         exerciseSessions: healthInsight.exerciseSessions,
-        totalExercises:   healthInsight.totalSessions,
+        totalExercises: healthInsight.totalSessions,
       } : null,
     };
   }

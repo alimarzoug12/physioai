@@ -12,6 +12,8 @@ import { BsChatFill } from 'react-icons/bs';
 import { FaHistory } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import NotificationBell from '../components/NotificationBell';
+import { useNotifications } from '../hooks/useNotifications';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => (
   <Icon className={className} />
@@ -128,6 +130,45 @@ function statusColor(status: string) {
   }
 }
 
+// Add this outside the class, near the top of PatientDashboard.tsx
+const NotificationIconButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
+  const { notifications, unreadCount, connect } = useNotifications();
+
+  // Load feed count on mount
+  React.useEffect(() => {
+    connect();
+    const token   = localStorage.getItem('token') ?? '';
+    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+
+    fetch(`${API_URL}/notifications/feed?limit=20`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: any[]) => {
+        // unreadCount will update automatically via setUnreadCount in useNotifications
+        // but we can also manually trigger it here:
+        const unread = data.filter((n: any) => !n.isRead).length;
+        // use the hook's setter — we need to expose it
+      })
+      .catch(() => {});
+  }, []);
+
+  const count = unreadCount;
+
+  return (
+    <button className="relative" onClick={onClick}>
+      <span className="text-3xl text-gray-600">
+        <IconWrapper icon={IoMdNotifications} />
+      </span>
+      {count > 0 && (
+        <span className="absolute -top-2 -right-2 bg-red-500 text-white border-2 border-white text-sm rounded-full w-6 h-6 flex items-center justify-center font-bold">
+          {count > 9 ? '9+' : count}
+        </span>
+      )}
+    </button>
+  );
+};
+
 class PatientDashboard extends React.Component<PatientDashboardProps, State> {
   state: State = { data: null, loading: true, error: '' };
 
@@ -174,10 +215,12 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
             </div>
           </div>
           <div className="flex items-center gap-6">
-            <button className="relative" onClick={() => this.props.navigate?.('/notifications')}>
+            {/* <button className="relative" onClick={() => this.props.navigate?.('/notifications')}>
               <span className="text-3xl text-gray-600"><IconWrapper icon={IoMdNotifications} /></span>
               <span className="absolute -top-4 -right-4 bg-red-500 text-white border-2 border-white text-lg rounded-full w-7 h-7 flex items-center justify-center">3</span>
-            </button>
+            </button> */}
+            <NotificationIconButton onClick={() => this.props.navigate?.('/notifications')} />
+            {/* <NotificationBell /> */}
             <button className="text-3xl text-gray-600" onClick={() => this.props.navigate?.('/settings')}>
               <IconWrapper icon={IoMdSettings} />
             </button>

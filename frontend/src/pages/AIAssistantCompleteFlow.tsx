@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+// import MedicalFileUpload from '../components/MedicalFileUpload';
 import {
   FaBrain, FaCheckDouble, FaDumbbell, FaRobot, FaCheck, FaClock,
   FaUserDoctor, FaTriangleExclamation, FaCamera, FaVideo, FaFileMedical,
@@ -11,6 +12,8 @@ import { BsThreeDotsVertical } from 'react-icons/bs';
 import { TbCircleDotted } from 'react-icons/tb';
 import { FaRunning, FaSmile } from 'react-icons/fa';
 import { IoIosSend } from 'react-icons/io';
+import { IoImageOutline, IoAttach } from 'react-icons/io5';
+import { uploadsApi } from '../services/uploads';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => (
   <Icon className={className} />
@@ -31,9 +34,17 @@ interface State {
   isTyping: boolean;
   selectedArea: string;
   painIntensity: string;
+  attachedFile: {
+    url: string;
+    fileName: string;
+    mimeType: string;
+  } | null;
+  showAttachMenu: boolean;
 }
 
 class AIAssistantCompleteFlow extends React.Component<Props, State> {
+  private imageInputRef = React.createRef<HTMLInputElement>();
+  private fileInputRef = React.createRef<HTMLInputElement>();
   state: State = {
     messages: [
       {
@@ -47,6 +58,8 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
     isTyping: false,
     selectedArea: 'Lower Back',
     painIntensity: 'Moderate',
+    attachedFile: null,
+    showAttachMenu: false,
   };
 
   messagesEndRef = React.createRef<HTMLDivElement>();
@@ -60,9 +73,19 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
     }
   }
 
+  // REPLACE WITH THIS:
   handleSend = () => {
-    const content = this.state.inputText.trim();
-    if (!content || this.state.isTyping) return;
+    const { inputText, attachedFile, isTyping } = this.state;
+    const text = inputText.trim();
+
+    if ((!text && !attachedFile) || isTyping) return;
+
+    // Build content string — encode file info inside message
+    let content = text;
+    if (attachedFile) {
+      const fileMarker = `\n__FILE__${attachedFile.fileName}|${attachedFile.url}|${attachedFile.mimeType}`;
+      content = text ? `${text}${fileMarker}` : fileMarker.trim();
+    }
 
     const userMsg: Message = {
       id: `user-${Date.now()}`,
@@ -71,13 +94,14 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
       time: 'Just now',
     };
 
+    // ✅ Clear BOTH inputText and attachedFile
     this.setState(prev => ({
       messages: [...prev.messages, userMsg],
       inputText: '',
+      attachedFile: null,   // ← this clears the preview bar
       isTyping: true,
     }));
 
-    // Show typing dots for 3 seconds then reply "Coming soon"
     setTimeout(() => {
       const botMsg: Message = {
         id: `bot-${Date.now()}`,
@@ -99,13 +123,71 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
   handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') this.handleSend();
   };
+  handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const result = await uploadsApi.uploadAvatar(file);
+      // ✅ Don't add text to inputText — just store in attachedFile
+      this.setState({
+        attachedFile: { url: result.url, fileName: file.name, mimeType: file.type },
+      });
+    } catch (err: any) {
+      alert(err.message || 'Image upload failed');
+    }
+    e.target.value = '';
+  };
+
+  handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const result = await uploadsApi.uploadMedicalFile(file);
+      // const publicUrl = result.url.includes('/raw/upload/')
+      //   ? result.url.replace('/raw/upload/', '/raw/upload/fl_attachment/')
+      //   : result.url;
+      // ✅ Don't add text to inputText — just store in attachedFile
+      this.setState({
+        attachedFile: { url: result.url, fileName: file.name, mimeType: file.type },
+      });
+    } catch (err: any) {
+      alert(err.message || 'File upload failed');
+    }
+    e.target.value = '';
+  };
 
   renderMessage(msg: Message) {
     const isUser = msg.role === 'USER';
-    return (
-      <div key={msg.id} className={`flex mb-6 ${isUser ? 'justify-end' : 'justify-start'}`}>
 
-        {/* AI avatar */}
+    // ── Step 1: extract file data from content string ──────────────
+    let textPart = msg.content;
+    let fileData: { name: string; url: string; mime: string } | null = null;
+
+    const marker = '__FILE__';
+    if (msg.content.includes(marker)) {
+      const idx = msg.content.indexOf(marker);
+      textPart = msg.content.substring(0, idx).trim();
+      const rest = msg.content.substring(idx + marker.length);
+      const p1 = rest.indexOf('|');
+      const p2 = rest.indexOf('|', p1 + 1);
+      if (p1 > -1 && p2 > -1) {
+        fileData = {
+          name: rest.substring(0, p1),
+          url: rest.substring(p1 + 1, p2),
+          mime: rest.substring(p2 + 1),
+        };
+      }
+    }
+
+    // ── Step 2: build bubble content ──────────────────────────────
+    const bubbleStyle = isUser
+      ? 'rounded-tr-none bg-blue-600 text-white'
+      : 'rounded-tl-none bg-white border border-gray-100 text-gray-800';
+
+    return (
+      <div key={msg.id} className={'flex mb-6 ' + (isUser ? 'justify-end' : 'justify-start')}>
+
+        {/* AI avatar — left side */}
         {!isUser && (
           <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-white rounded-full flex items-center justify-center mr-3 flex-shrink-0">
             <IconWrapper icon={FaRobot} className="text-white text-2xl" />
@@ -113,13 +195,83 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
         )}
 
         <div className="max-w-[80%] flex flex-col">
-          <div className={`p-5 rounded-3xl shadow-sm ${isUser
-              ? 'rounded-tr-none bg-blue-600 text-white'
-              : 'rounded-tl-none bg-white border border-gray-100 text-gray-800'
-            }`}>
-            <p className="text-xl leading-relaxed">{msg.content}</p>
+
+          {/* Bubble */}
+          <div className={'rounded-3xl shadow-sm overflow-hidden ' + bubbleStyle}>
+
+            {/* Image preview */}
+            {fileData !== null && fileData.mime.startsWith('image/') && (
+              <img
+                src={fileData.url}
+                alt={fileData.name}
+                className="w-full object-cover rounded-t-3xl"
+                style={{ maxHeight: 220, maxWidth: 300 }}
+              />
+            )}
+
+            {/* PDF / document card */}
+            {fileData !== null && !fileData.mime.startsWith('image/') && (
+              <div
+                className={'flex items-center gap-3 px-4 py-3 cursor-pointer ' + (isUser ? 'hover:bg-blue-700' : 'hover:bg-gray-50')}
+                onClick={() => {
+                  const url = fileData!.url;
+                  const mimeType = fileData!.mime;
+
+                  if (mimeType === 'application/pdf') {
+                    // ✅ Open PDF natively in browser — fl_inline handles Content-Disposition
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                  } else if (
+                    mimeType === 'application/msword' ||
+                    mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                  ) {
+                    // ✅ Word docs — use Office Online viewer (works with any public URL)
+                    const officeUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`;
+                    window.open(officeUrl, '_blank', 'noopener,noreferrer');
+                  } else {
+                    // ✅ Any other file — just open directly
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+              >
+                <div className={'w-10 h-10 rounded-full flex items-center justify-center ' + (isUser ? 'bg-blue-500' : 'bg-orange-100')}>
+                  {fileData!.mime === 'application/pdf' ? (
+                    <span className="text-xl">📕</span>
+                  ) : fileData!.mime.includes('word') ? (
+                    <span className="text-xl">📝</span>
+                  ) : (
+                    <span className="text-xl">📄</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={'text-lg font-medium truncate ' + (isUser ? 'text-white' : 'text-gray-800')}>
+                    {fileData!.name}
+                  </p>
+                  <p className={'text-sm ' + (isUser ? 'text-blue-200' : 'text-gray-400')}>
+                    {fileData!.mime === 'application/pdf'
+                      ? 'PDF Document · Tap to open'
+                      : fileData!.mime.includes('word')
+                        ? 'Word Document · Tap to open'
+                        : 'File · Tap to open'}
+                  </p>
+                </div>
+                <span className={'text-xl ' + (isUser ? 'text-blue-200' : 'text-gray-400')}>↗</span>
+              </div>
+            )}
+
+            {/* Text */}
+            {textPart.length > 0 && (
+              <p className="text-xl leading-relaxed p-5">{textPart}</p>
+            )}
+
+            {/* Image with no text — small bottom gap */}
+            {fileData !== null && fileData.mime.startsWith('image/') && textPart.length === 0 && (
+              <div className="pb-2" />
+            )}
+
           </div>
-          <p className={`text-lg mt-2 flex items-center gap-1 text-gray-400 ${isUser ? 'justify-end' : 'justify-start'}`}>
+
+          {/* Timestamp */}
+          <p className={'text-lg mt-2 flex items-center gap-1 text-gray-400 ' + (isUser ? 'justify-end' : 'justify-start')}>
             {!isUser && <span>AI Assistant •</span>}
             <span>{msg.time}</span>
             {isUser && (
@@ -129,14 +281,16 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
               </>
             )}
           </p>
+
         </div>
 
-        {/* User avatar */}
+        {/* User avatar — right side */}
         {isUser && (
           <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-200 rounded-full flex items-center justify-center ml-3 flex-shrink-0">
             <span className="text-white text-lg font-bold">U</span>
           </div>
         )}
+
       </div>
     );
   }
@@ -402,10 +556,108 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
 
         {/* ── Fixed input bar at bottom ─────────────────────── */}
         <div className="bg-white border-t border-gray-200 p-4 shadow-2xl flex-shrink-0">
+          {/* Hidden file inputs — never visible, triggered by .click() */}
+          <input
+            ref={this.imageInputRef}
+            type="file"
+            accept="image/jpeg,image/jpg,image/png,image/webp"
+            className="hidden"
+            onChange={this.handleImageSelect}
+          />
+          <input
+            ref={this.fileInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+            className="hidden"
+            onChange={this.handleFileSelect}
+          />
+
+          {/* Attach menu — appears above the + button when showAttachMenu is true */}
+          {this.state.showAttachMenu && (
+            <>
+              {/* Invisible full-screen backdrop — click anywhere outside to close */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => this.setState({ showAttachMenu: false })}
+              />
+
+              {/* The popup card */}
+              <div className="absolute bottom-20 left-4 z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+
+                {/* Image option */}
+                <button
+                  onClick={() => {
+                    this.setState({ showAttachMenu: false });
+                    this.imageInputRef.current?.click();
+                  }}
+                  className="flex items-center gap-4 px-6 py-4 hover:bg-blue-50 transition w-full text-left"
+                >
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-500 text-2xl flex-shrink-0">
+                    <IconWrapper icon={IoImageOutline} />
+                  </div>
+                  <div>
+                    <p className="text-gray-900 text-xl font-semibold">Image</p>
+                    <p className="text-gray-400 text-lg">JPEG, PNG, WebP · Max 5 MB</p>
+                  </div>
+                </button>
+
+                {/* Divider */}
+                <div className="h-px bg-gray-100 mx-4" />
+
+                {/* Medical file option */}
+                <button
+                  onClick={() => {
+                    this.setState({ showAttachMenu: false });
+                    this.fileInputRef.current?.click();
+                  }}
+                  className="flex items-center gap-4 px-6 py-4 hover:bg-blue-50 transition w-full text-left"
+                >
+                  <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center text-orange-500 text-2xl flex-shrink-0">
+                    <IconWrapper icon={IoAttach} />
+                  </div>
+                  <div>
+                    <p className="text-gray-900 text-xl font-semibold">Medical File</p>
+                    <p className="text-gray-400 text-lg">PDF, Word, Image · Max 20 MB</p>
+                  </div>
+                </button>
+
+              </div>
+            </>
+          )}
+
+          {/* Attached file preview bar — only shows when a file is selected */}
+          {this.state.attachedFile && (
+            <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 mb-3">
+              <span className="text-2xl">
+                {this.state.attachedFile.mimeType.startsWith('image/') ? '🖼️' : '📄'}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-blue-700 text-lg font-medium truncate">
+                  {this.state.attachedFile.fileName}
+                </p>
+                <p className="text-blue-500 text-sm">Ready to send</p>
+              </div>
+              <button
+                onClick={() => this.setState({ attachedFile: null })}
+                className="text-gray-400 hover:text-red-500 text-xl transition flex-shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-3">
-            <button className="text-gray-400 p-3 rounded-full hover:text-gray-600 transition">
+            <button
+              onClick={() => this.setState(prev => ({ showAttachMenu: !prev.showAttachMenu }))}
+              className={`p-3 rounded-full transition ${this.state.showAttachMenu
+                ? 'text-blue-500 bg-blue-50'
+                : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+                }`}
+            >
               <IconWrapper icon={FiPlus} className="text-3xl" />
             </button>
+            {/* <button className="text-gray-400 p-3 rounded-full hover:text-gray-600 transition">
+              <IconWrapper icon={FiPlus} className="text-3xl" />
+            </button> */}
             <div className="relative flex-1">
               <input
                 type="text"

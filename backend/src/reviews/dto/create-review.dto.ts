@@ -1,0 +1,17 @@
+// create-review.dto.ts
+import { IsString, IsInt, Min, Max, IsOptional, IsUUID } from 'class-validator';
+
+export class CreateReviewDto {
+  @IsUUID()
+  @IsString()
+  bookingId: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  rating: number;
+
+  @IsOptional()
+  @IsString()
+  comment?: string;
+}

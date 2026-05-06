@@ -1,78 +1,103 @@
 // src/context/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  authApi, tokenStore,
+  startTokenRefreshTimer, stopTokenRefreshTimer,
+} from '../services/auth';
 
-// ── Types ──────────────────────────────────────────────────────────
 interface User {
   id: string;
   email: string;
   fullName: string;
   role: string;
-  emailVerified?: boolean;
+  emailVerified: boolean;
 }
 
-// FIXED: added `token` to the exported interface
-export interface AuthContextValue {
-  user:    User | null;
-  token:   string | null;    // ← was missing, caused all 3 TS2339 errors
-  loading: boolean;
-  login:   (token: string, user: User) => void;
-  logout:  () => void;
+interface AuthContextValue {
+  user:         User | null;
+  token:        string | null;      // kept for backward compatibility
+  isLoggedIn:   boolean;
+  authChecked:  boolean;
+  login:        (accessToken: string, user: User) => void;
+  logout:       () => void;
 }
 
 const AuthContext = createContext<AuthContextValue>({
-  user:    null,
-  token:   null,
-  loading: true,
-  login:   () => {},
-  logout:  () => {},
+  user:        null,
+  token:       null,
+  isLoggedIn:  false,
+  authChecked: false,
+  login:       () => {},
+  logout:      () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user,    setUser]    = useState<User | null>(null);
-  const [token,   setToken]   = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user,        setUser]        = useState<User | null>(null);
+  const [token,       setToken]       = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  // Restore session from localStorage on app start
   useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem('token');
-      const storedUser  = localStorage.getItem('user');
-      if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
+    // Try silent refresh on app load
+    authApi.silentRefresh().then(ok => {
+      if (ok) {
+        authApi.getMe()
+          .then(u => {
+            setUser(u);
+            setToken(tokenStore.get());
+            startTokenRefreshTimer();
+          })
+          .catch(() => { tokenStore.clear(); })
+          .finally(() => setAuthChecked(true));
+      } else {
+        setAuthChecked(true);
       }
-    } catch {
-      // corrupt storage — clear it
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-    } finally {
-      setLoading(false);
-    }
+    });
+
+    const handleForceLogout = () => {
+      setUser(null);
+      setToken(null);
+      stopTokenRefreshTimer();
+    };
+    window.addEventListener('auth:logout', handleForceLogout);
+    return () => window.removeEventListener('auth:logout', handleForceLogout);
   }, []);
 
-  const login = (newToken: string, newUser: User) => {
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user',  JSON.stringify(newUser));
-    setToken(newToken);
-    setUser(newUser);
-  };
+  const login = useCallback((accessToken: string, userData: User) => {
+    tokenStore.set(accessToken);
+    setToken(accessToken);
+    setUser(userData);
+    // Also keep in localStorage for backward compatibility with pages
+    // that still read localStorage.getItem('token')
+    localStorage.setItem('token', accessToken);
+    startTokenRefreshTimer();
+  }, []);
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  // ✅ Merged logout — handles both old localStorage approach and new cookie approach
+  const logout = useCallback(() => {
+    // Call backend to revoke refresh token cookie (fire and forget)
+    authApi.logout().catch(() => {});
+
+    // Clear everything
+    tokenStore.clear();
     setToken(null);
     setUser(null);
-  };
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    stopTokenRefreshTimer();
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      isLoggedIn:  !!user,
+      authChecked,
+      login,
+      logout,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
-
-export default AuthContext;
+export const useAuth = () => useContext(AuthContext);

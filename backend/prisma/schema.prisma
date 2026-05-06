@@ -21,6 +21,7 @@ model User {
   verificationExpiresAt DateTime?
   resetToken            String?
   resetTokenExpiresAt   DateTime?
+  avatarUrl        String?
 
   bookings         Booking[]
   doctor           Doctor?
@@ -33,6 +34,9 @@ model User {
   refreshTokens    RefreshToken[]
   emailTokens      EmailToken[]
   payments         Payment[]
+  notifications    Notification[]
+  reviews          Review[]  
+  fileUploads      FileUpload[]
 }
 
 enum Role {
@@ -65,11 +69,13 @@ model Doctor {
   pricePerSession Float
   languages       String[]
   isAvailable     Boolean  @default(true)
+  avatarUrl       String?
 
   user            User     @relation(fields: [userId], references: [id])
   center          Center   @relation(fields: [centerId], references: [id])
   slots           Slot[]
   bookings        Booking[]
+  reviews         Review[]
 }
 
 model Slot {
@@ -79,28 +85,33 @@ model Slot {
   startTime String
   endTime   String
   isBooked  Boolean  @default(false)
+  isBlocked Boolean @default(false)
 
   doctor    Doctor   @relation(fields: [doctorId], references: [id])
-  booking   Booking?
+  booking   Booking[]
 }
 
 model Booking {
   id          String        @id @default(uuid())
   patientId   String
   doctorId    String
-  slotId      String        @unique
+  slotId      String
   status      BookingStatus @default(PENDING)
   sessionType SessionType   @default(CLINIC)
   notes       String?
+  totalAmount Float?
+  paidAt      DateTime?
+  cancelledAt   DateTime?
+  cancelReason  String?
+  rescheduledAt DateTime?
   createdAt   DateTime      @default(now())
   bookedVia   BookedVia     @default(APP)
 
   patient     User          @relation(fields: [patientId], references: [id])
   doctor      Doctor        @relation(fields: [doctorId], references: [id])
-  slot        Slot          @relation(fields: [slotId], references: [id])
-  totalAmount Float?
-  paidAt      DateTime?
+  slot        Slot          @relation(fields: [slotId], references: [id])  
   payment     Payment?
+  review      Review?
   }
 
 enum BookingStatus {
@@ -108,6 +119,7 @@ enum BookingStatus {
   CONFIRMED
   CANCELLED
   COMPLETED
+  RESCHEDULED
 }
 
 enum SessionType {
@@ -345,4 +357,46 @@ enum PaymentStatus {
   FAILED
   REFUNDED
   PARTIALLY_REFUNDED
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  data      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  bookingId String   @unique
+  patientId String
+  doctorId  String
+  rating    Float
+  comment   String?
+  createdAt DateTime @default(now())
+
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  patient   User     @relation(fields: [patientId], references: [id])
+  doctor    Doctor   @relation(fields: [doctorId],  references: [id])
+}
+
+model FileUpload {
+  id           String   @id @default(uuid())
+  userId       String
+  url          String   // final Cloudinary URL
+  publicId     String   // Cloudinary public_id (for deletion)
+  resourceType String   // 'image' | 'raw'
+  folder       String   // 'avatars' | 'medical-files'
+  fileName     String
+  fileSize     Int
+  mimeType     String
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

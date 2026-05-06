@@ -25,6 +25,7 @@ import {
 import VerifyEmail from './pages/VerifyEmail';
 import ResetPassword from './pages/ResetPassword';
 import PaymentCallback from './pages/PaymentCallback';
+import ScheduleManager from './pages/ScheduleManager';
 interface State {
   showSplash:    boolean;
   authChecked:   boolean;
@@ -96,7 +97,8 @@ class App extends React.Component<{}, State> {
               <Route path="/smart-therapy-assistant-sidebar" element={isLoggedIn ? <SmartTherapyAssistantSidebar /> : <Navigate to="/" />} />
               <Route path="/patient-home" element={isLoggedIn ? <PatientHomeWithRouter /> : <Navigate to="/" />} />
               <Route path="/provider-dashboard" element={isLoggedIn ? <ProviderDashboardWithRouter /> : <Navigate to="/" />} />
-              <Route path="/physiotherapist-dashboard-header" element={isLoggedIn ? <PhysiotherapistDashboardHeader /> : <Navigate to="/" />} />                           
+              <Route path="/physiotherapist-dashboard-header" element={isLoggedIn ? <PhysiotherapistDashboardHeader /> : <Navigate to="/" />} />
+              <Route path="/schedule" element={isLoggedIn ? <ScheduleManager /> : <Navigate to="/" />} />
             </Routes>
           </div>
         </Router>

@@ -10,6 +10,9 @@ import {
 import { TbCircleDotted } from 'react-icons/tb';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import CancelBookingModal from '../components/CancelBookingModal';
+import RescheduleBookingModal from '../components/RescheduleBookingModal';
+import ReviewModal from '../components/ReviewModal';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => (
   <Icon className={className} />
@@ -17,6 +20,7 @@ const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string 
 
 // ── Types ──────────────────────────────────────────────────────────
 interface Doctor {
+  id?: string;
   fullName: string;
   specialty: string;
   center: string;
@@ -34,6 +38,7 @@ interface SessionItem {
   sessionType: string;
   notes?: string;
   price?: string;
+  hasReview: boolean;
   doctor: Doctor;
 }
 
@@ -67,6 +72,13 @@ interface State {
   activeTab: string;
   exercises: Array<{ name: string; time: string; done: boolean }>;
   loadingExercise: string | null;
+  showCancelModal: boolean,
+  showRescheduleModal: boolean,
+  selectedBookingId: string,
+  selectedDoctorId: string,
+  showReviewModal: boolean;
+  reviewBookingId: string;
+  reviewDoctorName: string;
 }
 
 function formatDate(dateStr: string) {
@@ -82,13 +94,20 @@ class SessionOverview extends React.Component<Props, State> {
     error: '',
     activeTab: 'all',
     exercises: [
-      { name: 'Core Strengthening',  time: '15 minutes • Pending', done: false },
-      { name: 'Stretching Routine',  time: '10 minutes • Pending', done: false },
-      { name: 'Walking Exercise',    time: '20 minutes • Pending', done: false },
-      { name: 'Posture Training',    time: '5 minutes • Pending',  done: false },
-      { name: 'Heat Therapy',        time: '15 minutes • Pending', done: false },
+      { name: 'Core Strengthening', time: '15 minutes • Pending', done: false },
+      { name: 'Stretching Routine', time: '10 minutes • Pending', done: false },
+      { name: 'Walking Exercise', time: '20 minutes • Pending', done: false },
+      { name: 'Posture Training', time: '5 minutes • Pending', done: false },
+      { name: 'Heat Therapy', time: '15 minutes • Pending', done: false },
     ],
     loadingExercise: null,
+    showCancelModal: false,
+    showRescheduleModal: false,
+    selectedBookingId: '',
+    selectedDoctorId: '',
+    showReviewModal: false,
+    reviewBookingId: '',
+    reviewDoctorName: '',
   };
 
   async componentDidMount() {
@@ -116,12 +135,23 @@ class SessionOverview extends React.Component<Props, State> {
     }, 2000);
   };
 
+  handleCancelled = () => {
+    this.setState({ showCancelModal: false, selectedBookingId: '' });
+    // Reload sessions
+    api.getSessions().then(data => this.setState({ data: data as any }));
+  };
+
+  handleRescheduled = () => {
+    this.setState({ showRescheduleModal: false, selectedBookingId: '' });
+    api.getSessions().then(data => this.setState({ data: data as any }));
+  };
+
   render() {
     const { data, loading, error, activeTab } = this.state;
     const stats = data?.stats;
 
     // ── completed exercises count ──────────────────────────
-    const doneCount  = this.state.exercises.filter(e => e.done).length;
+    const doneCount = this.state.exercises.filter(e => e.done).length;
     const totalCount = this.state.exercises.length;
     const exercisePct = Math.round((doneCount / totalCount) * 100);
 
@@ -232,9 +262,9 @@ class SessionOverview extends React.Component<Props, State> {
             {/* Stats Row */}
             <div className="bg-gray-50 grid grid-cols-3 gap-4 mb-4 p-6">
               {[
-                { icon: FaChartLine, color: 'text-blue-500',  label: 'Recovery Rate', val: `${stats?.recoveryRate ?? 0}%`,    valColor: 'text-green-500' },
-                { icon: FaDumbbell,  color: 'text-gray-800',  label: 'Completed',     val: `${stats?.completedSessions ?? 0}`, valColor: 'text-green-500' },
-                { icon: FaClock,     color: 'text-orange-500',label: 'Upcoming',      val: `${stats?.upcomingSessions ?? 0}`,  valColor: 'text-gray-700' },
+                { icon: FaChartLine, color: 'text-blue-500', label: 'Recovery Rate', val: `${stats?.recoveryRate ?? 0}%`, valColor: 'text-green-500' },
+                { icon: FaDumbbell, color: 'text-gray-800', label: 'Completed', val: `${stats?.completedSessions ?? 0}`, valColor: 'text-green-500' },
+                { icon: FaClock, color: 'text-orange-500', label: 'Upcoming', val: `${stats?.upcomingSessions ?? 0}`, valColor: 'text-gray-700' },
               ].map(({ icon, color, label, val, valColor }) => (
                 <div key={label} className="bg-white rounded-2xl border border-gray-100 p-6 text-center">
                   <span className={`flex justify-center text-3xl ${color} mb-2 block`}>
@@ -250,18 +280,17 @@ class SessionOverview extends React.Component<Props, State> {
             <div className='px-6 bg-white'>
               <div className="bg-gray-100 rounded-2xl p-1 grid grid-cols-3">
                 {[
-                  { key: 'all',       label: 'All Sessions' },
-                  { key: 'completed', label: 'Completed'    },
-                  { key: 'upcoming',  label: 'Upcoming'     },
+                  { key: 'all', label: 'All Sessions' },
+                  { key: 'completed', label: 'Completed' },
+                  { key: 'upcoming', label: 'Upcoming' },
                 ].map(({ key, label }) => (
                   <button
                     key={key}
                     onClick={() => this.setState({ activeTab: key })}
-                    className={`py-3 text-xl font-semibold transition rounded-xl ${
-                      activeTab === key
-                        ? 'text-blue-500 bg-white m-0.5 shadow-sm'
-                        : 'text-gray-500'
-                    }`}
+                    className={`py-3 text-xl font-semibold transition rounded-xl ${activeTab === key
+                      ? 'text-blue-500 bg-white m-0.5 shadow-sm'
+                      : 'text-gray-500'
+                      }`}
                   >
                     {label}
                   </button>
@@ -319,9 +348,8 @@ class SessionOverview extends React.Component<Props, State> {
                       </div>
                       <div className="text-right text-white/70 text-lg">
                         <p>{data.upcoming[0].sessionType === 'HOME_VISIT' ? 'Home Visit' : 'Clinic'}</p>
-                        <p className={`font-medium ${
-                          data.upcoming[0].status === 'CONFIRMED' ? 'text-green-300' : 'text-yellow-300'
-                        }`}>
+                        <p className={`font-medium ${data.upcoming[0].status === 'CONFIRMED' ? 'text-green-300' : 'text-yellow-300'
+                          }`}>
                           {data.upcoming[0].status}
                         </p>
                       </div>
@@ -333,11 +361,24 @@ class SessionOverview extends React.Component<Props, State> {
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-4">
-                      <button className="bg-white/20 text-white py-3 rounded-2xl font-semibold text-xl">
+                      <button
+                        onClick={() => this.setState({
+                          showRescheduleModal: true,
+                          selectedBookingId: data!.upcoming[0].id,
+                          selectedDoctorId: data!.upcoming[0].doctor?.id || '',
+                        })}
+                        className="bg-white/20 text-white py-3 rounded-2xl font-semibold text-xl"
+                      >
                         Reschedule
                       </button>
-                      <button className="bg-white text-blue-500 py-3 rounded-2xl font-semibold text-xl">
-                        View Details
+                      <button
+                        onClick={() => this.setState({
+                          showCancelModal: true,
+                          selectedBookingId: data!.upcoming[0].id,
+                        })}
+                        className="bg-red-400/80 text-white py-3 rounded-2xl font-semibold text-xl"
+                      >
+                        Cancel
                       </button>
                     </div>
                   </div>
@@ -376,6 +417,27 @@ class SessionOverview extends React.Component<Props, State> {
                         <IconWrapper icon={FaAngleRight} className="text-gray-400 text-xl" />
                       </button>
                     </div>
+                    <div className="flex gap-3 pt-2 border-t border-gray-100">
+                      <button
+                        onClick={() => this.setState({
+                          showRescheduleModal: true,
+                          selectedBookingId: session.id,
+                          selectedDoctorId: session.doctor?.id || '',
+                        })}
+                        className="flex-1 text-blue-500 border border-blue-200 rounded-xl px-4 py-2 text-lg hover:bg-blue-50 transition text-center"
+                      >
+                        Reschedule
+                      </button>
+                      <button
+                        onClick={() => this.setState({
+                          showCancelModal: true,
+                          selectedBookingId: session.id,
+                        })}
+                        className="flex-1 text-red-500 border border-red-200 rounded-xl px-4 py-2 text-lg hover:bg-red-50 transition text-center"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -398,7 +460,7 @@ class SessionOverview extends React.Component<Props, State> {
                 {/* First completed — expanded card */}
                 {data?.completed[0] && (
                   <div className="bg-white rounded-3xl border border-gray-100 p-6 mb-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-200">
-                    <div className="flex items-center gap-4 mb-3">
+                    <div className="flex items-center gap-3 mb-3">
                       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xl">
                         <IconWrapper icon={FaCircleCheck} />
                       </div>
@@ -410,6 +472,22 @@ class SessionOverview extends React.Component<Props, State> {
                           {formatDate(data.completed[0].date)} • {data.completed[0].startTime}
                         </p>
                       </div>
+                      {!data.completed[0].hasReview ? (
+                        <button
+                          onClick={() => this.setState({
+                            showReviewModal: true,
+                            reviewBookingId: data.completed[0].id,
+                            reviewDoctorName: data.completed[0].doctor.fullName,
+                          })}
+                          className="bg-gray-100 text-gray-700 text-lg font-medium flex items-center justify-center gap-3 px-3 py-1 rounded-full"
+                        >
+                          <IconWrapper icon={FaStar} className="text-yellow-400 text-lg" /> Rate This Session
+                        </button>
+                      ) : (
+                        <div className="bg-green-100 text-green-600 text-lg font-medium flex items-center justify-center gap-3 p-2 rounded-full">
+                          <span className="w-4 h-4"><IconWrapper icon={FaCheck} /></span>
+                        </div>
+                      )}
                       <span className="bg-green-100 text-green-600 text-lg px-3 py-1 rounded-full font-medium">
                         Completed
                       </span>
@@ -469,7 +547,7 @@ class SessionOverview extends React.Component<Props, State> {
                 {/* Rest of completed sessions */}
                 {data?.completed.slice(1).map(session => (
                   <div key={session.id} className="bg-white rounded-2xl border border-gray-100 p-6 mb-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-200">
-                    <div className="flex items-center gap-4 mb-4">
+                    <div className="flex items-center gap-3 mb-4">
                       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-500 text-xl">
                         <IconWrapper icon={FaCircleCheck} />
                       </div>
@@ -479,6 +557,22 @@ class SessionOverview extends React.Component<Props, State> {
                           {formatDate(session.date)} • {session.startTime}
                         </p>
                       </div>
+                      {!session.hasReview ? (
+                        <button
+                          onClick={() => this.setState({
+                            showReviewModal: true,
+                            reviewBookingId: session.id,
+                            reviewDoctorName: session.doctor.fullName,
+                          })}
+                          className="bg-gray-100 text-gray-700 text-lg font-medium flex items-center justify-center gap-3 px-3 py-1 rounded-full"
+                        >
+                          <IconWrapper icon={FaStar} className="text-yellow-400 text-lg" /> Rate This Session
+                        </button>
+                      ) : (
+                        <div className="bg-green-100 text-green-600 text-lg font-medium flex items-center justify-center gap-3 p-2 rounded-full">
+                          <span className="w-4 h-4"><IconWrapper icon={FaCheck} /></span>
+                        </div>
+                      )}
                       <span className="bg-green-100 text-green-600 text-lg px-3 py-1 rounded-full font-medium">
                         Completed
                       </span>
@@ -532,31 +626,28 @@ class SessionOverview extends React.Component<Props, State> {
                     icon: FaChartLine,
                     color: 'text-green-500',
                     title: 'Progress Trend',
-                    text: `You have completed ${stats?.completedSessions ?? 0} out of ${stats?.totalSessions ?? 0} sessions with a ${stats?.recoveryRate ?? 0}% recovery rate. ${
-                      (stats?.recoveryRate ?? 0) >= 50
-                        ? "You're making excellent progress!"
-                        : "Keep going, every session counts!"
-                    }`,
+                    text: `You have completed ${stats?.completedSessions ?? 0} out of ${stats?.totalSessions ?? 0} sessions with a ${stats?.recoveryRate ?? 0}% recovery rate. ${(stats?.recoveryRate ?? 0) >= 50
+                      ? "You're making excellent progress!"
+                      : "Keep going, every session counts!"
+                      }`,
                   },
                   {
                     icon: TbCircleDotted,
                     color: 'text-blue-500',
                     title: 'Next Milestone',
-                    text: `You have ${stats?.upcomingSessions ?? 0} upcoming sessions. ${
-                      (stats?.upcomingSessions ?? 0) > 0
-                        ? 'Stay consistent to maximize your recovery.'
-                        : 'Consider booking your next session to continue your progress.'
-                    }`,
+                    text: `You have ${stats?.upcomingSessions ?? 0} upcoming sessions. ${(stats?.upcomingSessions ?? 0) > 0
+                      ? 'Stay consistent to maximize your recovery.'
+                      : 'Consider booking your next session to continue your progress.'
+                      }`,
                   },
                   {
                     icon: FaAward,
                     color: 'text-gray-800',
                     title: 'Achievement',
-                    text: `${stats?.weeksInTreatment ?? 0} weeks in treatment. ${
-                      (stats?.completedSessions ?? 0) > 0
-                        ? `You've completed ${stats?.completedSessions} sessions — great dedication!`
-                        : 'Start your journey by booking your first session.'
-                    }`,
+                    text: `${stats?.weeksInTreatment ?? 0} weeks in treatment. ${(stats?.completedSessions ?? 0) > 0
+                      ? `You've completed ${stats?.completedSessions} sessions — great dedication!`
+                      : 'Start your journey by booking your first session.'
+                      }`,
                   },
                 ].map(({ icon, color, title, text }) => (
                   <div key={title} className="bg-white border border-gray-100 rounded-2xl p-6">
@@ -598,13 +689,11 @@ class SessionOverview extends React.Component<Props, State> {
                     return (
                       <div
                         key={name}
-                        className={`flex items-center gap-4 p-4 rounded-xl ${
-                          done ? 'bg-green-50' : 'bg-gray-50 border-4 border-dashed border-gray-200'
-                        }`}
+                        className={`flex items-center gap-4 p-4 rounded-xl ${done ? 'bg-green-50' : 'bg-gray-50 border-4 border-dashed border-gray-200'
+                          }`}
                       >
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0 ${
-                          done ? 'bg-green-500 text-white' : 'bg-gray-300 text-white'
-                        }`}>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0 ${done ? 'bg-green-500 text-white' : 'bg-gray-300 text-white'
+                          }`}>
                           <IconWrapper icon={done ? FaCheck : FaClock} />
                         </div>
                         <div className="flex-1">
@@ -693,6 +782,33 @@ class SessionOverview extends React.Component<Props, State> {
               </div>
             </div>
           </>
+        )}
+        {this.state.showCancelModal && (
+          <CancelBookingModal
+            bookingId={this.state.selectedBookingId}
+            onCancelled={this.handleCancelled}
+            onClose={() => this.setState({ showCancelModal: false })}
+          />
+        )}
+
+        {this.state.showRescheduleModal && (
+          <RescheduleBookingModal
+            bookingId={this.state.selectedBookingId}
+            doctorId={this.state.selectedDoctorId}
+            onRescheduled={this.handleRescheduled}
+            onClose={() => this.setState({ showRescheduleModal: false })}
+          />
+        )}
+        {this.state.showReviewModal && (
+          <ReviewModal
+            bookingId={this.state.reviewBookingId}
+            doctorName={this.state.reviewDoctorName}
+            onDone={() => {
+              this.setState({ showReviewModal: false });
+              api.getSessions().then(data => this.setState({ data: data as any }));
+            }}
+            onClose={() => this.setState({ showReviewModal: false })}
+          />
         )}
       </div>
     );

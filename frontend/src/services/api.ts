@@ -201,7 +201,7 @@ export const api = {
   // ✅ Doctor's own profile — requires auth
   getDoctorMe: () =>
     apiFetch<any>('/doctors/me'),
-  
+
   // getWallet: async (token: string) => {
   //   const res = await fetch(`${API_URL}/wallet/me`, {
   //     headers: { 'Authorization': `Bearer ${token}` },
@@ -280,7 +280,7 @@ export const api = {
   //   return res.json();
   // },
   // src/services/api.ts
-  
+
 
   // validatePromo: async (code: string) => {
   //   const res = await fetch(`${API_URL}/promos/validate?code=${encodeURIComponent(code)}`);
@@ -367,26 +367,26 @@ export const api = {
   },
 
   createBooking: (dto: {
-    doctorId:        string;
-    slotId:          string;
-    sessionType:     'CLINIC' | 'HOME_VISIT';
+    doctorId: string;
+    slotId: string;
+    sessionType: 'CLINIC' | 'HOME_VISIT';
     durationMinutes: number;
-    paymentMethod:   string;
-    promoCode?:      string;
-    notes?:          string;
-    requirements?:   string[];
-    totalAmount:     number;
+    paymentMethod: string;
+    promoCode?: string;
+    notes?: string;
+    requirements?: string[];
+    totalAmount: number;
   }) =>
     apiFetch<{
-      bookingId:       string;
-      status:          string;
-      totalAmount:     number;
-      paymentMethod:   string;
+      bookingId: string;
+      status: string;
+      totalAmount: number;
+      paymentMethod: string;
       requiresPayment: boolean;
-      message:         string;
+      message: string;
     }>('/bookings', {
       method: 'POST',
-      body:   JSON.stringify(dto),
+      body: JSON.stringify(dto),
     }),
 
   getSessions: () =>
@@ -395,8 +395,8 @@ export const api = {
   getBookingById: (id: string) =>
     apiFetch<any>(`/bookings/${id}`),
 
-  cancelBooking: (id: string) =>
-    apiFetch<any>(`/bookings/${id}/cancel`, { method: 'PATCH' }),
+  // cancelBooking: (id: string) =>
+  //   apiFetch<any>(`/bookings/${id}/cancel`, { method: 'PATCH' }),
 
   // ──────────────────────────────────────────────────────────────
   // WALLET  (requires auth)
@@ -406,8 +406,8 @@ export const api = {
 
   getWallet: (_token?: string) =>
     apiFetch<{
-      balance:      number;
-      currency:     string;
+      balance: number;
+      currency: string;
       rewardPoints: number;
     }>('/wallet/me'),
 
@@ -453,7 +453,7 @@ export const api = {
   sendChatMessage: (content: string) =>
     apiFetch<any>('/chat/message', {
       method: 'POST',
-      body:   JSON.stringify({ content }),
+      body: JSON.stringify({ content }),
     }),
 
   clearChatSession: () =>
@@ -465,11 +465,11 @@ export const api = {
 
   validatePromo: (code: string) =>
     publicFetch<{
-      valid:           boolean;
-      code?:           string;
+      valid: boolean;
+      code?: string;
       discountPercent?: number;
-      label?:          string;
-      message?:        string;
+      label?: string;
+      message?: string;
     }>(`/promos/validate?code=${encodeURIComponent(code)}`),
 
   // ──────────────────────────────────────────────────────────────
@@ -478,34 +478,34 @@ export const api = {
 
   updateProfile: (data: {
     fullName?: string;
-    phone?:    string;
+    phone?: string;
   }) =>
     apiFetch<any>('/auth/profile', {
       method: 'PATCH',
-      body:   JSON.stringify(data),
+      body: JSON.stringify(data),
     }),
 
   updateHealthProfile: (data: {
-    age?:          string;
-    gender?:       string;
-    backPain?:     boolean;
-    jointPain?:    boolean;
+    age?: string;
+    gender?: string;
+    backPain?: boolean;
+    jointPain?: boolean;
     sportsInjury?: boolean;
-    neckIssues?:   boolean;
+    neckIssues?: boolean;
     activityLevel?: string;
   }) =>
     apiFetch<any>('/health-profile', {
       method: 'PATCH',
-      body:   JSON.stringify(data),
+      body: JSON.stringify(data),
     }),
 
   changePassword: (data: {
     currentPassword: string;
-    newPassword:     string;
+    newPassword: string;
   }) =>
     apiFetch<any>('/auth/change-password', {
       method: 'POST',
-      body:   JSON.stringify(data),
+      body: JSON.stringify(data),
     }),
 
   // ──────────────────────────────────────────────────────────────
@@ -516,22 +516,165 @@ export const api = {
     apiFetch<any[]>('/reminders'),
 
   createReminder: (data: {
-    title:   string;
+    title: string;
     message: string;
-    type:    'SESSION' | 'EXERCISE' | 'MEDICATION';
-    time?:   string;
+    type: 'SESSION' | 'EXERCISE' | 'MEDICATION';
+    time?: string;
   }) =>
     apiFetch<any>('/reminders', {
       method: 'POST',
-      body:   JSON.stringify(data),
+      body: JSON.stringify(data),
     }),
 
   toggleReminder: (id: string, isActive: boolean) =>
     apiFetch<any>(`/reminders/${id}`, {
       method: 'PATCH',
-      body:   JSON.stringify({ isActive }),
+      body: JSON.stringify({ isActive }),
     }),
 
   deleteReminder: (id: string) =>
     apiFetch<any>(`/reminders/${id}`, { method: 'DELETE' }),
+
+  // Preview what refund you'll get before cancelling
+  getCancellationPolicy: (bookingId: string) =>
+    apiFetch<{
+      canCancel: boolean;
+      canReschedule: boolean;
+      refundPercent: number;
+      refundAmount: number;
+      totalPaid: number;
+      policyLabel: string;
+      sessionDate: string;
+      sessionTime: string;
+    }>(`/bookings/${bookingId}/policy`),
+
+  cancelBooking: (bookingId: string, reason?: string) =>
+    apiFetch<{
+      cancelled: boolean;
+      bookingId: string;
+      refundPercent: number;
+      refundAmount: number;
+      policyLabel: string;
+      message: string;
+    }>(`/bookings/${bookingId}/cancel`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+
+  rescheduleBooking: (bookingId: string, newSlotId: string) =>
+    apiFetch<{
+      rescheduled: boolean;
+      bookingId: string;
+      newSlotId: string;
+      newDate: string;
+      newTime: string;
+      message: string;
+    }>(`/bookings/${bookingId}/reschedule`, {
+      method: 'PATCH',
+      body: JSON.stringify({ newSlotId }),
+    }),
+
+  getNotificationFeed: (_limit?: number) =>
+    apiFetch<any[]>(`/notifications/feed${_limit ? `?limit=${_limit}` : ''}`),
+
+  getUnreadCount: () =>
+    apiFetch<{ count: number }>('/notifications/unread-count'),
+
+  // ── Paste these methods inside your existing `api` object in src/services/api.ts ──
+
+  getMySchedule: async (month?: string) => {
+    const token = localStorage.getItem('token') ?? '';
+    const qs = month ? `?month=${month}` : '';
+    const res = await fetch(`${API_URL}/slots/my-schedule${qs}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to load schedule');
+    return res.json();
+  },
+
+  bulkCreateSlots: async (data: {
+    daysOfWeek: number[]; startTime: string;
+    durationMinutes: number; startDate: string; endDate: string;
+  }) => {
+    const token = localStorage.getItem('token') ?? '';
+    const res = await fetch(`${API_URL}/slots/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Failed to create slots' }));
+      throw new Error(err.message);
+    }
+    return res.json();
+  },
+
+  updateSlot: async (slotId: string, data: { isBlocked?: boolean }) => {
+    const token = localStorage.getItem('token') ?? '';
+    const res = await fetch(`${API_URL}/slots/${slotId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Failed to update slot' }));
+      throw new Error(err.message);
+    }
+    return res.json();
+  },
+
+  deleteSlot: async (slotId: string) => {
+    const token = localStorage.getItem('token') ?? '';
+    const res = await fetch(`${API_URL}/slots/${slotId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Failed to delete slot' }));
+      throw new Error(err.message);
+    }
+    return res.json();
+  },
+
+  deleteDaySlots: async (date: string) => {
+    const token = localStorage.getItem('token') ?? '';
+    const res = await fetch(`${API_URL}/slots/day?date=${date}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Failed to clear day' }));
+      throw new Error(err.message);
+    }
+    return res.json();
+  },
+
+  submitReview: (data: {
+    bookingId: string;
+    rating: number;
+    comment?: string;
+  }) =>
+    apiFetch<{ success: boolean; reviewId: string; message: string }>(
+      '/reviews',
+      { method: 'POST', body: JSON.stringify(data) },
+    ),
+
+  getDoctorReviews: (doctorId: string, page = 1, limit = 10) =>
+    publicFetch<{
+      reviews: Array<{
+        id: string;
+        rating: number;
+        comment: string | null;
+        createdAt: string;
+        patientName: string;
+      }>;
+      pagination: { total: number; page: number; totalPages: number };
+      summary: { averageRating: number; totalReviews: number; starCounts: Record<number, number> };
+    }>(`/doctors/${doctorId}/reviews?page=${page}&limit=${limit}`),
+
+  canReview: (bookingId: string) =>
+    apiFetch<{ canReview: boolean; reason?: string; reviewId?: string }>(
+      `/reviews/can-review/${bookingId}`,
+    ),
+
 };
