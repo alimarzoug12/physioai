@@ -36,4 +36,14 @@ export class CreateBookingDto {
 
   @IsNumber()
   totalAmount: number;
+
+  @IsOptional()
+  @IsString()
+  homeAddress?: string;
+
+  @IsNumber()
+  latitude?: number;
+
+  @IsNumber()
+  longitude?: number;
 }

@@ -10,6 +10,7 @@ import {
 } from 'react-icons/fa6';
 import { TiHome } from 'react-icons/ti';
 import { api } from '../services/api';
+import DoctorSearch from '../components/DoctorSearch';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => (
   <Icon className={className} />
@@ -24,7 +25,17 @@ interface Doctor {
   centerAddress: string; isAvailable: boolean; avatarUrl: string;
   todaySlots: Slot[]; isTopPick: boolean;
 }
-interface State { view: 'list' | 'map'; doctors: Doctor[]; loading: boolean; error: string }
+interface State {
+  view: 'list' | 'map';
+  doctors: Doctor[];
+  loading: boolean;
+  error: string;
+  filterNearby: boolean;
+  filterRating: boolean;
+  filterAvailable: boolean;
+  filterPrice: boolean;
+  filterGender: 'any' | 'male' | 'female';
+}
 interface Props { navigate?: (path: string) => void }
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -42,15 +53,46 @@ function StarRating({ rating }: { rating: number }) {
 
 // ── Main Component ────────────────────────────────────────────────
 class PhysioBookingFlow extends React.Component<Props, State> {
-  state: State = { view: 'list', doctors: [], loading: true, error: '' };
+  state: State = {
+    view: 'list',
+    doctors: [],
+    loading: true,
+    error: '',
+    filterNearby: false,
+    filterRating: false,
+    filterAvailable: false,
+    filterPrice: false,
+    filterGender: 'any',
+  };
 
   async componentDidMount() {
     try {
-      const doctors = await api.getDoctors();
+      const result = await api.getDoctors();
+      const doctors = Array.isArray(result)
+        ? result
+        : (result as any).doctors
+        ?? [];
       this.setState({ doctors, loading: false });
     } catch (err: any) {
       this.setState({ error: err.message || 'Failed to load doctors', loading: false });
     }
+  }
+
+  getFilteredDoctors(): Doctor[] {
+    const { doctors, filterRating, filterAvailable, filterPrice } = this.state;
+    let result = [...doctors];
+
+    if (filterRating) {
+      result = result.filter(d => d.rating >= 4);
+    }
+    if (filterAvailable) {
+      result = result.filter(d => d.todaySlots && d.todaySlots.length > 0);
+    }
+    if (filterPrice) {
+      result = result.sort((a, b) => a.pricePerSession - b.pricePerSession);
+    }
+
+    return result;
   }
 
   // ── Top Pick Card (first doctor) ─────────────────────────────
@@ -166,7 +208,7 @@ class PhysioBookingFlow extends React.Component<Props, State> {
             <div className="flex flex-wrap gap-2">
               {doctor.specialties.map((s, i) => (
                 <span key={i} className={`px-3 py-1 rounded-full text-xl ${i === 0 ? 'bg-blue-50 text-blue-700' :
-                    i === 1 ? 'text-gray-800' : 'bg-purple-50 text-purple-700'
+                  i === 1 ? 'text-gray-800' : 'bg-purple-50 text-purple-700'
                   }`}>{s}</span>
               ))}
             </div>
@@ -273,8 +315,10 @@ class PhysioBookingFlow extends React.Component<Props, State> {
 
   render() {
     const { view, doctors, loading, error } = this.state;
-    const topDoctor = doctors[0];
-    const otherDoctors = doctors.slice(1);
+    const filteredDoctors = this.getFilteredDoctors();
+    const topDoctor = filteredDoctors[0];
+    const otherDoctors = filteredDoctors.slice(1);
+
 
     return (
       <div className="flex flex-col min-h-screen bg-gray-50 overflow-y-auto pb-20">
@@ -287,6 +331,9 @@ class PhysioBookingFlow extends React.Component<Props, State> {
           >
             <IconWrapper icon={FaArrowLeft} />
           </button>
+          <DoctorSearch
+            onSelectDoctor={(doctorId) => this.props.navigate?.(`/book/${doctorId}`)}
+          />
           <button className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 text-2xl">
             <IconWrapper icon={FaHeart} />
           </button>
@@ -334,7 +381,7 @@ class PhysioBookingFlow extends React.Component<Props, State> {
         </div>
 
         {/* FILTERS */}
-        <div className="flex flex-col bg-white gap-3 px-6 py-4">
+        {/* <div className="flex flex-col bg-white gap-3 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-gray-600 py-2 text-xl font-medium">
               <IconWrapper icon={FaFilter} className="text-gray-500" /> Filters
@@ -365,6 +412,80 @@ class PhysioBookingFlow extends React.Component<Props, State> {
               <button key={label} className={`px-5 py-3 rounded-full border text-xl font-normal flex items-center gap-2 transition mr-1 ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
                 }`}>
                 <IconWrapper icon={icon} /> {label}
+              </button>
+            ))}
+          </div>
+        </div> */}
+
+        {/* FILTERS */}
+        <div className="flex flex-col bg-white gap-3 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-gray-600 py-2 text-xl font-medium">
+              <IconWrapper icon={FaFilter} className="text-gray-500" /> Filters
+            </div>
+            <div className="flex items-center gap-3 bg-gray-100 p-2 rounded-xl">
+              <button
+                onClick={() => this.setState({ view: 'list' })}
+                className={`flex items-center gap-1 py-1 px-4 rounded-lg ${view === 'list' ? 'bg-white text-gray-900' : 'text-gray-500'}`}
+              >
+                <span className="text-xl"><IconWrapper icon={FaList} /></span> List
+              </button>
+              <button
+                onClick={() => this.setState({ view: 'map' })}
+                className={`flex items-center gap-1 py-1 px-4 rounded-lg ${view === 'map' ? 'bg-white text-gray-900' : 'text-gray-500'}`}
+              >
+                <span className="text-xl"><IconWrapper icon={FaMap} /></span> Map
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-2">
+            {[
+              {
+                icon: FaLocationDot,
+                label: 'Nearby (5km)',
+                active: this.state.filterNearby,
+                onClick: () => this.setState(p => ({ filterNearby: !p.filterNearby })),
+              },
+              {
+                icon: FaStar,
+                label: '4+ Rating',
+                active: this.state.filterRating,
+                onClick: () => this.setState(p => ({ filterRating: !p.filterRating })),
+              },
+              {
+                icon: FaClock,
+                label: 'Available Today',
+                active: this.state.filterAvailable,
+                onClick: () => this.setState(p => ({ filterAvailable: !p.filterAvailable })),
+              },
+              {
+                icon: FaDollarSign,
+                label: 'Price Range',
+                active: this.state.filterPrice,
+                onClick: () => this.setState(p => ({ filterPrice: !p.filterPrice })),
+              },
+              {
+                icon: FaVenusMars,
+                label: 'Gender',
+                active: this.state.filterGender !== 'any',
+                onClick: () => this.setState(p => ({
+                  filterGender: p.filterGender === 'any' ? 'male'
+                    : p.filterGender === 'male' ? 'female' : 'any'
+                })),
+              },
+            ].map(({ icon, label, active, onClick }) => (
+              <button
+                key={label}
+                onClick={onClick}
+                className={`px-5 py-3 rounded-full border text-xl font-normal flex items-center gap-2 transition mr-1 ${active
+                    ? 'bg-blue-100 text-blue-700 border-blue-200'
+                    : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                  }`}
+              >
+                <IconWrapper icon={icon} /> {label}
+                {label === 'Gender' && this.state.filterGender !== 'any' && (
+                  <span className="ml-1 capitalize">{this.state.filterGender}</span>
+                )}
               </button>
             ))}
           </div>
@@ -414,7 +535,12 @@ class PhysioBookingFlow extends React.Component<Props, State> {
                   onClick={() => {
                     this.setState({ loading: true, error: '' });
                     api.getDoctors()
-                      .then(d => this.setState({ doctors: d, loading: false }))
+                      .then(result => {
+                        const doctors = Array.isArray(result)
+                          ? result
+                          : (result as any).doctors ?? [];
+                        this.setState({ doctors, loading: false });
+                      })
                       .catch(e => this.setState({ error: e.message, loading: false }));
                   }}
                   className="mt-4 bg-blue-500 text-white px-6 py-2 rounded-xl text-xl"
@@ -538,7 +664,7 @@ class PhysioBookingFlow extends React.Component<Props, State> {
               <p className="text-blue-500 text-lg">Tomorrow 02:00 PM</p>
             </button>
           </div>
-        </div>        
+        </div>
 
         {/* WHAT PATIENTS SAY — kept static (reviews feature is future) */}
         <div className="bg-white shadow-md p-6">

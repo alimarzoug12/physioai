@@ -5,16 +5,16 @@ import { useNotifications, NotificationItem } from '../hooks/useNotifications';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 const TYPE_ICON: Record<string, string> = {
-  BOOKING_CONFIRMED:   '✅',
-  BOOKING_CANCELLED:   '❌',
+  BOOKING_CONFIRMED: '✅',
+  BOOKING_CANCELLED: '❌',
   BOOKING_RESCHEDULED: '📅',
-  NEW_BOOKING:         '🆕',
-  PAYMENT_SUCCESS:     '💳',
-  PAYMENT_FAILED:      '⚠️',
-  SESSION_REMINDER:    '⏰',
-  ACHIEVEMENT:         '🏆',
-  EXERCISE:            '💪',
-  GENERAL:             '🔔',
+  NEW_BOOKING: '🆕',
+  PAYMENT_SUCCESS: '💳',
+  PAYMENT_FAILED: '⚠️',
+  SESSION_REMINDER: '⏰',
+  ACHIEVEMENT: '🏆',
+  EXERCISE: '💪',
+  GENERAL: '🔔',
 };
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -45,23 +45,28 @@ const NotificationBell: React.FC = () => {
     requestPermission();
 
     // Load persisted notifications from DB on mount
-    apiFetch<NotificationItem[]>('/notifications/feed?limit=20')
+    apiFetch<any>('/notifications/feed?limit=20')
       .then(data => {
-        setNotifications(data);
-        setUnreadCount(data.filter(n => !n.isRead).length);
+        const list: NotificationItem[] = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
+        setNotifications(list);
+        setUnreadCount(list.filter((n: NotificationItem) => !n.isRead).length);
       })
-      .catch(() => {}); // silent if backend not ready
+      .catch(() => { });
   }, []);
 
   const handleMarkRead = async (n: NotificationItem) => {
     if (n.isRead) return;
     markRead(n.id);
-    apiFetch(`/notifications/${n.id}/read`, { method: 'PATCH' }).catch(() => {});
+    apiFetch(`/notifications/${n.id}/read`, { method: 'PATCH' }).catch(() => { });
   };
 
   const handleMarkAllRead = async () => {
     markAllRead();
-    apiFetch('/notifications/read-all', { method: 'PATCH' }).catch(() => {});
+    apiFetch('/notifications/read-all', { method: 'PATCH' }).catch(() => { });
   };
 
   return (
@@ -123,9 +128,8 @@ const NotificationBell: React.FC = () => {
                   <div
                     key={n.id}
                     onClick={() => handleMarkRead(n)}
-                    className={`flex gap-3 p-4 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition ${
-                      !n.isRead ? 'bg-blue-50/50' : ''
-                    }`}
+                    className={`flex gap-3 p-4 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition ${!n.isRead ? 'bg-blue-50/50' : ''
+                      }`}
                   >
                     <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 text-xl">
                       {TYPE_ICON[n.type] || '🔔'}

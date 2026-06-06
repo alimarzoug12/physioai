@@ -4,11 +4,12 @@ import { BookingsController } from './bookings.controller';
 import { BookingsService } from './bookings.service';
 import { PrismaService } from '../prisma.service';
 import { NotificationsModule } from 'src/notifications/notifications.module';
+import { HomeVisitService } from './dto/home-visit.service';
 
 @Module({
   imports:     [NotificationsModule],
   controllers: [BookingsController],
-  providers:   [BookingsService, PrismaService],
+  providers:   [BookingsService, HomeVisitService, PrismaService],
   exports:     [BookingsService],
 })
 export class BookingsModule {}

@@ -336,21 +336,21 @@ export class AuthService {
 
     // Email not verified — resend code and tell frontend to show modal
     if (!user.emailVerified) {
-      const code      = this.generateCode();
+      const code = this.generateCode();
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
       await this.prisma.user.update({
         where: { email: dto.email },
-        data:  { verificationCode: code, verificationExpiresAt: expiresAt },
+        data: { verificationCode: code, verificationExpiresAt: expiresAt },
       });
 
-      this.sendVerificationCodeEmail(user.email, user.fullName, code).catch(() => {});
+      this.sendVerificationCodeEmail(user.email, user.fullName, code).catch(() => { });
 
       // Use a structured error so the frontend can detect it
       throw new UnauthorizedException(
         JSON.stringify({
-          code:    'EMAIL_NOT_VERIFIED',
-          email:   user.email,
+          code: 'EMAIL_NOT_VERIFIED',
+          email: user.email,
           message: 'Please verify your email. A new code has been sent.',
         }),
       );
@@ -523,6 +523,25 @@ export class AuthService {
 
     this.logger.log(`Password reset for: ${user.email}`);
     return { message: 'Password reset successfully. Please log in with your new password.' };
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    // ✅ passwordHash not password
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedException('Current password is incorrect');
+
+    const hashed = await bcrypt.hash(newPassword, 12);
+
+    // ✅ passwordHash not password
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: hashed },
+    });
+
+    return { success: true, message: 'Password updated successfully' };
   }
 
   // ─────────────────────────────────────────────────────────────────

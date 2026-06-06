@@ -189,14 +189,58 @@ export const api = {
   //   return response.json();
   // },
 
-  getDoctors: () =>
-    publicFetch<any[]>('/doctors'),
+  // getDoctors: () =>
+  //   publicFetch<any[]>('/doctors'),
+  // Replace the existing getDoctors with this:
+  getDoctors: (filters?: {
+    specialty?: string;
+    city?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    rating?: number;
+    language?: string;
+    available?: boolean;
+    search?: string;
+    sortBy?: 'rating' | 'price_asc' | 'price_desc' | 'experience';
+    page?: number;
+    limit?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.specialty !== undefined) params.set('specialty', filters.specialty);
+    if (filters?.city !== undefined) params.set('city', filters.city);
+    if (filters?.minPrice !== undefined) params.set('minPrice', String(filters.minPrice));
+    if (filters?.maxPrice !== undefined) params.set('maxPrice', String(filters.maxPrice));
+    if (filters?.rating !== undefined) params.set('rating', String(filters.rating));
+    if (filters?.language !== undefined) params.set('language', filters.language);
+    if (filters?.available !== undefined) params.set('available', String(filters.available));
+    if (filters?.search !== undefined) params.set('search', filters.search);
+    if (filters?.sortBy !== undefined) params.set('sortBy', filters.sortBy);
+    if (filters?.page !== undefined) params.set('page', String(filters.page));
+    if (filters?.limit !== undefined) params.set('limit', String(filters.limit));
+    const query = params.toString();
+    return publicFetch<{
+      doctors: any[];
+      total: number;
+      page: number;
+      totalPages: number;
+      hasMore: boolean;
+    }>(`/doctors${query ? `?${query}` : ''}`);
+  },
+
+  // Add this new method:
+  getDoctorFilterOptions: () =>
+    publicFetch<{
+      specialties: string[];
+      cities: string[];
+      languages: string[];
+      priceRange: { min: number; max: number };
+    }>('/doctors/filter-options'),
 
   getDoctorById: (id: string) =>
     publicFetch<any>(`/doctors/${id}`),
 
   getSlotsForDate: (doctorId: string, date: string) =>
-    publicFetch<any[]>(`/doctors/${doctorId}/slots?date=${date}`),
+    apiFetch<any[]>(`/doctors/${doctorId}/slots?date=${date}`),
 
   // ✅ Doctor's own profile — requires auth
   getDoctorMe: () =>
@@ -376,11 +420,16 @@ export const api = {
     notes?: string;
     requirements?: string[];
     totalAmount: number;
+    homeAddress?: string;
+    latitude?: number;
+    longitude?: number;
   }) =>
     apiFetch<{
       bookingId: string;
       status: string;
       totalAmount: number;
+      travelFee: number;
+      distanceKm: number;
       paymentMethod: string;
       requiresPayment: boolean;
       message: string;
@@ -676,5 +725,34 @@ export const api = {
     apiFetch<{ canReview: boolean; reason?: string; reviewId?: string }>(
       `/reviews/can-review/${bookingId}`,
     ),
+
+  getRecommendedDoctors: (limit?: number) =>
+    apiFetch<Array<{
+      id: string;
+      fullName: string;
+      specialty: string;
+      specialties: string[];
+      rating: number;
+      pricePerSession: number;
+      experience: string;
+      centerName: string;
+      centerCity: string;
+      avatarUrl: string;
+      isAvailable: boolean;
+      languages: string[];
+      matchScore: number;
+      matchReasons: string[];
+      scoreBreakdown: {
+        specialty: number;
+        availability: number;
+        rating: number;
+        price: number;
+        language: number;
+        experience: number;
+        gender: number;
+      };
+    }>>(`/doctors/recommended${limit ? `?limit=${limit}` : ''}`),
+
+
 
 };

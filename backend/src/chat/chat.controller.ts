@@ -5,7 +5,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 @Controller('chat')
 @UseGuards(JwtAuthGuard)
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(private readonly chatService: ChatService) { }
 
   // GET /chat/session — load history
   @Get('session')
@@ -14,9 +14,17 @@ export class ChatController {
   }
 
   // POST /chat/message — send a message, get AI reply
+  // ✅ CORRECT — handles both { content: "..." } and other shapes
   @Post('message')
-  sendMessage(@Req() req: any, @Body('content') content: string) {
-    return this.chatService.sendMessage(req.user.userId, content);
+  async sendMessage(
+    @Req() req: any,
+    @Body() body: { content?: string; message?: string },
+  ) {
+    const content = body.content || body.message || '';
+    if (!content.trim()) {
+      return { assistantMessage: { content: 'Please type a message.' } };
+    }
+    return this.chatService.sendMessage(req.user.userId, content.trim());
   }
 
   // DELETE /chat/session — clear history

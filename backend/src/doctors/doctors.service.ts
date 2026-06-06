@@ -2,6 +2,19 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 
+export interface DoctorFilters {
+  specialty?: string;
+  city?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  rating?: number;
+  language?: string;
+  available?: boolean;
+  search?: string;
+  sortBy?: 'rating' | 'price_asc' | 'price_desc' | 'experience';
+  page?: number;
+  limit?: number;
+}
 @Injectable()
 export class DoctorsService {
   private readonly logger = new Logger(DoctorsService.name);
@@ -36,33 +49,83 @@ export class DoctorsService {
       isAvailable: d.isAvailable,
       avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(d.user.fullName)}&background=${index % 2 === 0 ? '3b82f6' : '8b5cf6'}&color=fff&size=200`,
       isTopPick: index === 0,
+      hasAvailableSlot: d.slots?.length > 0,
     };
   }
 
-  async getAllDoctors() {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today.getTime() + 86_400_000);
+  async getAllDoctors(page = 1, limit = 10, filters?: {
+    search?: string;
+    specialty?: string;
+    city?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    rating?: number;
+    language?: string;
+    available?: boolean;
+    sortBy?: string;
+  }) {
+    const skip = (page - 1) * limit;
+    const where: any = { isAvailable: true };
 
-    const doctors = await this.prisma.doctor.findMany({
-      where: { isAvailable: true },
-      include: {
-        user: true,
-        center: true,
-        slots: {
-          where: { isBooked: false, date: { gte: today, lt: tomorrow } },
-          orderBy: { startTime: 'asc' },
-          take: 4,
+    if (filters?.specialty) where.specialties = { has: filters.specialty };
+    if (filters?.language) where.languages = { has: filters.language };
+    if (filters?.minPrice || filters?.maxPrice) {
+      where.pricePerSession = {};
+      if (filters.minPrice) where.pricePerSession.gte = filters.minPrice;
+      if (filters.maxPrice) where.pricePerSession.lte = filters.maxPrice;
+    }
+    if (filters?.rating) where.rating = { gte: filters.rating };
+    if (filters?.search) {
+      where.user = { fullName: { contains: filters.search, mode: 'insensitive' } };
+    }
+    if (filters?.city) {
+      where.center = { city: { contains: filters.city, mode: 'insensitive' } };
+    }
+
+    const orderBy: any =
+      filters?.sortBy === 'price_asc' ? { pricePerSession: 'asc' } :
+        filters?.sortBy === 'price_desc' ? { pricePerSession: 'desc' } :
+          { rating: 'desc' };
+    const now = new Date();
+    const weekEnd = new Date(now.getTime() + 7 * 86_400_000);
+
+    const [total, doctors] = await Promise.all([
+      this.prisma.doctor.count({ where }),
+      this.prisma.doctor.findMany({
+        where,
+        include: {
+          user: true,
+          center: true,
+          slots: {
+            where: {
+              isBooked: false,
+              date: { gte: now, lt: weekEnd },
+            },
+            orderBy: { startTime: 'asc' },
+            take: 4,
+          },
         },
-      },
-      orderBy: { rating: 'desc' },
-    });
+        orderBy: { rating: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
 
-    return doctors.map((d, i) => ({
+    const mapped = doctors.map((d, i) => ({
       ...this.formatDoctor(d, i),
       todaySlots: d.slots.map(s => ({
         id: s.id, startTime: s.startTime, endTime: s.endTime,
       })),
+      hasAvailableSlot: d.slots.length > 0,
     }));
+
+    return {
+      doctors: mapped,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasMore: page < Math.ceil(total / limit),
+    };
   }
 
   async getDoctorById(id: string) {
@@ -155,45 +218,45 @@ export class DoctorsService {
   // }
 
   async getSlotsForDate(doctorId: string, dateStr: string) {
-  // Parse the date carefully — avoid timezone issues
-  const parts = dateStr.split('-');
-  const year  = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1; // JS months are 0-indexed
-  const day   = parseInt(parts[2], 10);
+    // Parse the date carefully — avoid timezone issues
+    const parts = dateStr.split('-');
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // JS months are 0-indexed
+    const day = parseInt(parts[2], 10);
 
-  // Use UTC midnight to avoid timezone shifting the date
-  const dayStart = new Date(Date.UTC(year, month, day, 0, 0, 0));
-  const dayEnd   = new Date(Date.UTC(year, month, day, 23, 59, 59));
+    // Use UTC midnight to avoid timezone shifting the date
+    const dayStart = new Date(Date.UTC(year, month, day - 1, 12, 0, 0));
+    const dayEnd = new Date(Date.UTC(year, month, day + 1, 12, 0, 0));
 
-  this.logger.log(`getSlotsForDate: doctorId=${doctorId} date=${dateStr} range=${dayStart.toISOString()} → ${dayEnd.toISOString()}`);
+    this.logger.log(`getSlotsForDate: doctorId=${doctorId} date=${dateStr} range=${dayStart.toISOString()} → ${dayEnd.toISOString()}`);
 
-  const slots = await this.prisma.slot.findMany({
-    where: {
-      doctorId,
-      date: { gte: dayStart, lte: dayEnd },
-    },
-    orderBy: { startTime: 'asc' },
-  });
+    const slots = await this.prisma.slot.findMany({
+      where: {
+        doctorId,
+        date: { gte: dayStart, lte: dayEnd },
+      },
+      orderBy: { startTime: 'asc' },
+    });
 
-  this.logger.log(`Found ${slots.length} slots for ${dateStr}`);
+    this.logger.log(`Found ${slots.length} slots for ${dateStr}`);
 
-  return slots.map(s => ({
-    id:        s.id,
-    time:      s.startTime,
-    startTime: s.startTime,
-    endTime:   s.endTime,
-    isBooked:  s.isBooked,
-    status:    s.isBooked ? 'booked' : 'available',
-    period:    this.getPeriod(s.startTime),
-  }));
-}
-
-  private getPeriod(time: string): 'morning' | 'afternoon' | 'evening' {
-    const hour = this.parseHour(time);
-    if (hour < 12) return 'morning';
-    if (hour < 17) return 'afternoon';
-    return 'evening';
+    return slots.map(s => ({
+      id: s.id,
+      time: s.startTime,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      isBooked: s.isBooked,
+      status: s.isBooked ? 'booked' : 'available',
+      period: this.getPeriod(s.startTime),
+    }));
   }
+
+  // private getPeriod(time: string): 'morning' | 'afternoon' | 'evening' {
+  //   const hour = this.parseHour(time);
+  //   if (hour < 12) return 'morning';
+  //   if (hour < 17) return 'afternoon';
+  //   return 'evening';
+  // }
 
   private parseHour(time: string): number {
     // Handles "9:00 AM", "2:30 PM", "14:30" etc.
@@ -238,5 +301,332 @@ export class DoctorsService {
       totalPatients: totalPatients.length,
       completedSessions,
     };
+  }
+  async findAll(filters: DoctorFilters = {}) {
+    const {
+      specialty,
+      city,
+      minPrice,
+      maxPrice,
+      rating,
+      language,
+      available,
+      search,
+      sortBy = 'rating',
+      page = 1,
+      limit = 20,
+    } = filters;
+
+    const skip = (page - 1) * limit;
+
+    // ── Build WHERE clause ─────────────────────────────────────
+    const where: any = {};
+
+    // Available filter
+    if (available !== undefined) {
+      where.isAvailable = available;
+    }
+
+    // Price range
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      where.pricePerSession = {};
+      if (minPrice !== undefined) where.pricePerSession.gte = minPrice;
+      if (maxPrice !== undefined) where.pricePerSession.lte = maxPrice;
+    }
+
+    // Minimum rating
+    if (rating !== undefined) {
+      where.rating = { gte: rating };
+    }
+
+    // Specialty filter (case-insensitive)
+    if (specialty && specialty.trim()) {
+      where.specialties = {
+        hasSome: [specialty],
+      };
+    }
+
+    // Language filter
+    if (language && language.trim()) {
+      where.languages = {
+        hasSome: [language],
+      };
+    }
+
+    // City filter — through the center relation
+    if (city && city.trim()) {
+      where.center = {
+        city: {
+          contains: city,
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    // Full-text search on name + specialty
+    // Searches both the user's fullName and the doctor's specialties
+    if (search && search.trim()) {
+      const searchTerm = search.trim();
+      where.OR = [
+        {
+          user: {
+            fullName: {
+              contains: searchTerm,
+              mode: 'insensitive',
+            },
+          },
+        },
+        {
+          specialties: {
+            hasSome: [searchTerm],
+          },
+        },
+        // Also search for partial specialty matches
+        {
+          user: {
+            fullName: {
+              contains: searchTerm,
+              mode: 'insensitive',
+            },
+          },
+        },
+      ];
+    }
+
+    // ── Build ORDER BY clause ──────────────────────────────────
+    let orderBy: any = { rating: 'desc' };
+
+    switch (sortBy) {
+      case 'rating':
+        orderBy = { rating: 'desc' };
+        break;
+      case 'price_asc':
+        orderBy = { pricePerSession: 'asc' };
+        break;
+      case 'price_desc':
+        orderBy = { pricePerSession: 'desc' };
+        break;
+      case 'experience':
+        orderBy = { yearsExperience: 'desc' };
+        break;
+    }
+
+    // ── Execute query ──────────────────────────────────────────
+    const [doctors, total] = await Promise.all([
+      this.prisma.doctor.findMany({
+        where,
+        include: {
+          user: true,
+          center: true,
+          slots: {
+            where: {
+              isBooked: false,
+              date: { gte: new Date() },
+            },
+            take: 1, // just need to know if any slot exists
+          },
+        },
+        orderBy,
+        skip,
+        take: limit,
+      }),
+      this.prisma.doctor.count({ where }),
+    ]);
+
+    // ── Map to response shape ──────────────────────────────────
+    const results = doctors.map(d => ({
+      id: d.id,
+      fullName: d.user.fullName,
+      specialty: d.specialties[0] ?? 'General Physiotherapy',
+      specialties: d.specialties,
+      rating: d.rating ?? 0,
+      pricePerSession: d.pricePerSession ?? 0,
+      experience: `${d.yearsExperience ?? 0} years`,
+      // yearsExperience: d.yearsExperience ?? 0,
+      centerName: d.center?.name ?? '',
+      centerCity: d.center?.city ?? '',
+      avatarUrl: d.user.avatarUrl ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(d.user.fullName)}&background=3b82f6&color=fff&size=128`,
+      isAvailable: d.isAvailable,
+      languages: d.languages ?? ['en'],
+      hasAvailableSlot: d.slots.length > 0,
+    }));
+
+    return {
+      doctors: results,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      hasMore: page * limit < total,
+    };
+  }
+
+  // ── Get unique filter options (for filter dropdowns) ──────────
+  async getFilterOptions() {
+    const doctors = await this.prisma.doctor.findMany({
+      include: { center: true },
+    });
+
+    // Collect all unique specialties
+    const specialties = [...new Set(
+      doctors.flatMap(d => d.specialties),
+    )].sort();
+
+    // Collect all unique cities
+    const cities = [...new Set(
+      doctors
+        .map(d => d.center?.city)
+        .filter(Boolean) as string[],
+    )].sort();
+
+    // Collect all unique languages
+    const languages = [...new Set(
+      doctors.flatMap(d => d.languages ?? ['en']),
+    )].sort();
+
+    // Price range
+    const prices = doctors
+      .map(d => d.pricePerSession ?? 0)
+      .filter(p => p > 0);
+
+    return {
+      specialties,
+      cities,
+      languages,
+      priceRange: {
+        min: prices.length ? Math.min(...prices) : 0,
+        max: prices.length ? Math.max(...prices) : 1000,
+      },
+    };
+  }
+
+  // ── Get single doctor ─────────────────────────────────────────
+  // async findOne(id: string) {
+  //   const doctor = await this.prisma.doctor.findUnique({
+  //     where: { id },
+  //     include: { user: true, center: true },
+  //   });
+
+  //   if (!doctor) return null;
+
+  //   return {
+  //     id: doctor.id,
+  //     fullName: doctor.user.fullName,
+  //     specialty: doctor.specialties[0] ?? 'General Physiotherapy',
+  //     specialties: doctor.specialties,
+  //     rating: doctor.rating ?? 0,
+  //     pricePerSession: doctor.pricePerSession ?? 0,
+  //     // experience: doctor.experience ?? '',
+  //     centerName: doctor.center?.name ?? '',
+  //     centerCity: doctor.center?.city ?? '',
+  //     avatarUrl: doctor.user.avatarUrl ||
+  //       `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.user.fullName)}&background=3b82f6&color=fff&size=128`,
+  //     isAvailable: doctor.isAvailable,
+  //     languages: doctor.languages ?? ['en'],
+  //   };
+  // }
+
+  // src/doctors/doctors.service.ts
+  async findOne(id: string) {
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id },
+      include: {
+        user: true,
+        center: true,
+        slots: {
+          where: {
+            isBooked: false,
+            date: { gte: new Date() },
+          },
+          orderBy: { date: 'asc' },
+          take: 20,
+        },
+      },
+    });
+
+    if (!doctor) return null;
+
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayStr = today.toISOString().split('T')[0];
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    const todaySlots = doctor.slots.filter(s =>
+      s.date.toISOString().split('T')[0] === todayStr,
+    );
+    const tomorrowSlots = doctor.slots.filter(s =>
+      s.date.toISOString().split('T')[0] === tomorrowStr,
+    );
+
+    // Get other doctors from same center
+    const sameCenterDoctors = doctor.centerId
+      ? await this.prisma.doctor.findMany({
+        where: { centerId: doctor.centerId, id: { not: id } },
+        include: { user: true },
+        take: 5,
+      })
+      : [];
+
+    // Count completed bookings for this doctor
+    const completedBookings = await this.prisma.booking.count({
+      where: { doctorId: id, status: 'COMPLETED' },
+    });
+
+    return {
+      id: doctor.id,
+      fullName: doctor.user.fullName,
+      phone: doctor.user.phone ?? '',
+      email: doctor.user.email,
+      specialty: doctor.specialties[0] ?? 'General Physiotherapy',
+      specialties: doctor.specialties,
+      rating: doctor.rating ?? 0,
+      pricePerSession: doctor.pricePerSession ?? 0,
+      languages: doctor.languages ?? ['English'],
+      bio: doctor.bio ?? `Dr. ${doctor.user.fullName} is a qualified physiotherapist with extensive experience.`,
+      experience: `${doctor.yearsExperience ?? 0} years`,
+      centerName: doctor.center?.name ?? '',
+      centerCity: doctor.center?.city ?? '',
+      centerAddress: doctor.center?.address ?? '',
+      centerPhone: doctor.center?.phone ?? '',
+      centerEmail: doctor.center?.email ?? '',
+      isAvailable: doctor.isAvailable,
+      avatarUrl: doctor.user.avatarUrl ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.user.fullName)}&background=3b82f6&color=fff&size=128`,
+      patientsTreated: Math.max(completedBookings, 10),
+      successRate: 95,
+      todaySlots: todaySlots.map(s => ({
+        id: s.id,
+        startTime: s.startTime,
+        endTime: s.endTime,
+      })),
+      tomorrowSlots: tomorrowSlots.map(s => ({
+        id: s.id,
+        startTime: s.startTime,
+        endTime: s.endTime,
+      })),
+      sameCenter: sameCenterDoctors.map(d => ({
+        id: d.id,
+        fullName: d.user.fullName,
+        specialty: d.specialties[0] ?? 'Physiotherapy',
+        rating: d.rating ?? 0,
+        avatarUrl: d.user.avatarUrl ||
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(d.user.fullName)}&background=3b82f6&color=fff&size=128`,
+      })),
+    };
+  }
+
+  // ── Get slots for a date ──────────────────────────────────────
+
+  private getPeriod(time: string): 'morning' | 'afternoon' | 'evening' {
+    const upper = time.toUpperCase();
+    let hour = parseInt(time.split(':')[0], 10);
+    if (upper.includes('PM') && hour !== 12) hour += 12;
+    if (upper.includes('AM') && hour === 12) hour = 0;
+    if (hour < 12) return 'morning';
+    if (hour < 17) return 'afternoon';
+    return 'evening';
   }
 }

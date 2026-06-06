@@ -5,6 +5,8 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 import { NotificationsService } from 'src/notifications/notifications.service';
+import { HomeVisitService } from './dto/home-visit.service';
+import { MailService } from '../mail/mail.service';
 
 
 function getCancellationPolicy(slotDate: Date, slotTime: string): {
@@ -34,7 +36,7 @@ function getCancellationPolicy(slotDate: Date, slotTime: string): {
 @Injectable()
 export class BookingsService {
   private readonly logger = new Logger(BookingsService.name);
-  constructor(private prisma: PrismaService, private notifications: NotificationsService,) { }
+  constructor(private prisma: PrismaService, private notifications: NotificationsService, private homeVisitSvc: HomeVisitService, private mail: MailService,) { }
 
   async createBooking(patientId: string, dto: CreateBookingDto) {
     // Verify slot is still available
@@ -67,6 +69,45 @@ export class BookingsService {
         where: { id: dto.slotId },
         data: { isBooked: false },
       });
+    }
+
+    // ── Home visit validation ─────────────────────────────────────
+    let travelFee = 0;
+    let distanceKm = 0;
+
+    if (dto.sessionType === 'HOME_VISIT') {
+      if (!dto.homeAddress) {
+        throw new BadRequestException(
+          'Home address is required for home visit sessions',
+        );
+      }
+
+      // Calculate travel fee if coordinates provided
+      if (dto.latitude && dto.longitude) {
+        const doctor = await this.prisma.doctor.findUnique({
+          where: { id: dto.doctorId },
+          include: { center: true },
+        });
+
+        if (doctor?.center?.latitude && doctor?.center?.longitude) {
+          const result = this.homeVisitSvc.estimateFee(
+            dto.latitude, dto.longitude,
+            doctor.center.latitude, doctor.center.longitude,
+          );
+          travelFee = result.travelFee;
+          distanceKm = result.distanceKm;
+
+          this.logger.log(
+            `Home visit: ${result.breakdown} for patient ${patientId}`,
+          );
+        } else {
+          // No center coordinates — use flat fee
+          travelFee = 80;
+        }
+      } else {
+        // No patient coordinates — use flat fee
+        travelFee = 80;
+      }
     }
 
     if (dto.paymentMethod === 'wallet') {
@@ -108,6 +149,10 @@ export class BookingsService {
           bookedVia: 'APP',
           status: isPaidImmediately ? 'CONFIRMED' : 'PENDING',
           totalAmount: dto.totalAmount,
+          homeAddress: dto.homeAddress || null,
+          latitude: dto.latitude || null,
+          longitude: dto.longitude || null,
+          travelFee: travelFee > 0 ? travelFee : null,
           ...(isPaidImmediately ? { paidAt: new Date() } : {}),
         },
       });
@@ -177,7 +222,7 @@ export class BookingsService {
       const [doctor, patient] = await Promise.all([
         this.prisma.doctor.findUnique({
           where: { id: dto.doctorId },
-          include: { user: true },
+          include: { user: true, center: true },  // ✅ add center for email
         }),
         this.prisma.user.findUnique({ where: { id: patientId } }),
       ]);
@@ -205,6 +250,28 @@ export class BookingsService {
           dateStr,
         ).catch(() => { });
       }
+
+      // ✅ Send confirmation email (fire-and-forget)
+      if (isPaidImmediately && patient && doctor) {
+        this.mail.sendBookingConfirmation({
+          patientName: patient.fullName,
+          patientEmail: patient.email,
+          doctorName: doctor.user.fullName,
+          specialty: doctor.specialties[0] ?? 'Physiotherapy',
+          sessionDate: new Date(slot.date).toLocaleDateString('en-US', {
+            weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+          }),
+          sessionTime: slot.startTime,
+          sessionType: dto.sessionType === 'HOME_VISIT' ? 'Home Visit' : 'Clinic Visit',
+          centerName: (doctor as any).center?.name ?? '',
+          centerAddress: (doctor as any).center?.address ?? '',
+          duration: dto.durationMinutes,
+          totalAmount: dto.totalAmount,
+          currency: 'QAR',
+          bookingId: result.id,
+        }).catch(() => { });
+      }
+
     } catch {
       // Silent — notifications never block booking response
     }
@@ -319,6 +386,32 @@ export class BookingsService {
 
     this.notifications.notifyBookingCancelled(patientId, bookingId, refundAmount).catch(() => { });
 
+    try {
+      const [patient, doctor] = await Promise.all([
+        this.prisma.user.findUnique({ where: { id: patientId } }),
+        this.prisma.doctor.findUnique({
+          where: { id: booking.doctorId },
+          include: { user: true },
+        }),
+      ]);
+
+      if (patient && doctor) {
+        this.mail.sendBookingCancelled({
+          patientName: patient.fullName,
+          patientEmail: patient.email,
+          doctorName: doctor.user.fullName,
+          sessionDate: booking.slot.date.toLocaleDateString('en-US', {
+            weekday: 'long', month: 'long', day: 'numeric',
+          }),
+          sessionTime: booking.slot.startTime,
+          refundAmount,
+          refundPercent: policy.refundPercent,
+          currency: 'QAR',
+          bookingId: booking.id,
+        }).catch(() => { });
+      }
+    } catch { /* silent */ }
+
     return {
       cancelled: true,
       bookingId,
@@ -410,6 +503,36 @@ export class BookingsService {
       patientId, bookingId, newDateStr, newSlot.startTime,
     ).catch(() => { });
 
+    try {
+      const [patient, doctor] = await Promise.all([
+        this.prisma.user.findUnique({ where: { id: patientId } }),
+        this.prisma.doctor.findUnique({
+          where: { id: booking.doctorId },
+          include: { user: true, center: true },
+        }),
+      ]);
+
+      if (patient && doctor) {
+        this.mail.sendBookingRescheduled({
+          patientName: patient.fullName,
+          patientEmail: patient.email,
+          doctorName: doctor.user.fullName,
+          specialty: doctor.specialties[0] ?? 'Physiotherapy',
+          oldDate: booking.slot.date.toLocaleDateString('en-US', {
+            weekday: 'long', month: 'short', day: 'numeric',
+          }),
+          oldTime: booking.slot.startTime,
+          newDate: newSlot.date.toLocaleDateString('en-US', {
+            weekday: 'long', month: 'short', day: 'numeric',
+          }),
+          newTime: newSlot.startTime,
+          sessionType: booking.sessionType === 'HOME_VISIT' ? 'Home Visit' : 'Clinic Visit',
+          centerName: (doctor as any).center?.name ?? '',
+          bookingId: booking.id,
+        }).catch(() => { });
+      }
+    } catch { /* silent */ }
+
     return {
       rescheduled: true,
       bookingId,
@@ -471,5 +594,50 @@ export class BookingsService {
     if (booking.patientId !== patientId) throw new BadRequestException('Access denied');
 
     return booking;
+  }
+
+  async estimateTravelFee(
+    doctorId: string,
+    patientLat: number,
+    patientLon: number,
+  ) {
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id: doctorId },
+      include: { center: true },
+    });
+
+    if (!doctor) throw new NotFoundException('Doctor not found');
+
+    if (!doctor.center?.latitude || !doctor.center?.longitude) {
+      return { travelFee: 80, distanceKm: null, message: 'Flat fee applied' };
+    }
+
+    return this.homeVisitSvc.estimateFee(
+      patientLat, patientLon,
+      doctor.center.latitude, doctor.center.longitude,
+    );
+  }
+
+  async getAllBookings(patientId: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const [total, bookings] = await Promise.all([
+      this.prisma.booking.count({ where: { patientId } }),
+      this.prisma.booking.findMany({
+        where: { patientId },
+        include: {
+          doctor: { include: { user: true, center: true } },
+          slot: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      data: bookings,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 }

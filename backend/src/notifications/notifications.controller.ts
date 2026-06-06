@@ -5,7 +5,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(private readonly notificationsService: NotificationsService) { }
 
   // Your existing endpoint — used by the Notifications page
   @Get()
@@ -15,9 +15,14 @@ export class NotificationsController {
 
   // New endpoint — for the bell dropdown (persisted notifications)
   @Get('feed')
-  getFeed(@Req() req: any, @Query('limit') limit?: string) {
+  getFeed(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     return this.notificationsService.getPersistedNotifications(
       req.user.userId,
+      page ? parseInt(page, 10) : 1,
       limit ? parseInt(limit, 10) : 20,
     );
   }

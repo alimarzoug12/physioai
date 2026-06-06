@@ -20,6 +20,8 @@ import { PaymentsModule } from './payments/payments.module';
 import { SlotsModule } from './slots/slots.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { TransactionsModule } from './transactions/transactions.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -51,6 +53,8 @@ import { UploadsModule } from './uploads/uploads.module';
     SlotsModule,
     ReviewsModule,
     UploadsModule,
+    TransactionsModule,
+    AdminModule,
   ],
   // NO AppController, NO AppService here
   providers: [PrismaService, TokenCleanupService],

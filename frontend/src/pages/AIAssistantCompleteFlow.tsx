@@ -19,11 +19,35 @@ const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string 
   <Icon className={className} />
 );
 
+interface MatchedDoctor {
+  id: string;
+  name: string;
+  specialties: string[];
+  rating: number;
+  price: number;
+  center: string;
+  centerAddress: string;
+  centerCity: string;
+  languages: string[];
+  bio: string;
+  isAvailable: boolean;
+  avatarUrl: string;
+  availableSlots: Array<{
+    id: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+  }>;
+  hasAvailableSlots: boolean;
+}
+
 interface Message {
   id: string;
   role: 'USER' | 'ASSISTANT';
   content: string;
   time: string;
+  matchedDoctors?: MatchedDoctor[];
+  bookingCreated?: boolean;
 }
 
 interface Props { navigate?: (path: string | number) => void }
@@ -72,15 +96,11 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
       this.messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }
-
-  // REPLACE WITH THIS:
-  handleSend = () => {
+  handleSend = async () => {
     const { inputText, attachedFile, isTyping } = this.state;
     const text = inputText.trim();
-
     if ((!text && !attachedFile) || isTyping) return;
 
-    // Build content string — encode file info inside message
     let content = text;
     if (attachedFile) {
       const fileMarker = `\n__FILE__${attachedFile.fileName}|${attachedFile.url}|${attachedFile.mimeType}`;
@@ -91,29 +111,65 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
       id: `user-${Date.now()}`,
       role: 'USER',
       content,
-      time: 'Just now',
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
     };
 
-    // ✅ Clear BOTH inputText and attachedFile
     this.setState(prev => ({
       messages: [...prev.messages, userMsg],
       inputText: '',
-      attachedFile: null,   // ← this clears the preview bar
+      attachedFile: null,
       isTyping: true,
     }));
 
-    setTimeout(() => {
+    try {
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const token = localStorage.getItem('token') ?? '';
+
+      const response = await fetch(`${API_URL}/chat/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: text || '[Patient attached a medical file]' }),
+      });
+
+      if (!response.ok) throw new Error(`Server responded with ${response.status}`);
+
+      const data = await response.json();
+
+      const reply =
+        data.assistantMessage?.content
+        || data.reply
+        || 'Sorry, I could not get a response.';
+
       const botMsg: Message = {
         id: `bot-${Date.now()}`,
         role: 'ASSISTANT',
-        content: 'Coming soon... 🚀 Full AI responses will be available shortly.',
-        time: 'Just now',
+        content: typeof reply === 'string' ? reply : JSON.stringify(reply),
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        matchedDoctors: data.matchedDoctors || [],
+        bookingCreated: data.bookingCreated || false,
       };
+
       this.setState(prev => ({
         messages: [...prev.messages, botMsg],
         isTyping: false,
       }));
-    }, 3000);
+
+    } catch (err: any) {
+      console.error('Chat error:', err);
+      const errorMsg: Message = {
+        id: `bot-error-${Date.now()}`,
+        role: 'ASSISTANT',
+        content: 'Sorry, I am having trouble connecting right now. Please try again.',
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      };
+      this.setState(prev => ({
+        messages: [...prev.messages, errorMsg],
+        isTyping: false,
+      }));
+    }
   };
 
   handleQuickAnswer = (text: string) => {
@@ -157,37 +213,40 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
   };
 
   renderMessage(msg: Message) {
+    // ✅ Safety guard — if content is undefined or null, skip rendering
+    if (!msg || !msg.content) return null;
+
     const isUser = msg.role === 'USER';
 
-    // ── Step 1: extract file data from content string ──────────────
     let textPart = msg.content;
-    let fileData: { name: string; url: string; mime: string } | null = null;
+    let fileName = '';
+    let fileUrl = '';
+    let mimeType = '';
+    let hasFile = false;
 
-    const marker = '__FILE__';
-    if (msg.content.includes(marker)) {
-      const idx = msg.content.indexOf(marker);
-      textPart = msg.content.substring(0, idx).trim();
-      const rest = msg.content.substring(idx + marker.length);
-      const p1 = rest.indexOf('|');
-      const p2 = rest.indexOf('|', p1 + 1);
-      if (p1 > -1 && p2 > -1) {
-        fileData = {
-          name: rest.substring(0, p1),
-          url: rest.substring(p1 + 1, p2),
-          mime: rest.substring(p2 + 1),
-        };
+    if (msg.content.includes('__FILE__')) {
+      const markerIndex = msg.content.indexOf('__FILE__');
+      textPart = msg.content.slice(0, markerIndex).trim();
+      const afterMarker = msg.content.slice(markerIndex + 8);
+      const firstPipe = afterMarker.indexOf('|');
+      const secondPipe = afterMarker.indexOf('|', firstPipe + 1);
+      if (firstPipe !== -1 && secondPipe !== -1) {
+        fileName = afterMarker.slice(0, firstPipe);
+        fileUrl = afterMarker.slice(firstPipe + 1, secondPipe);
+        mimeType = afterMarker.slice(secondPipe + 1);
+        hasFile = true;
       }
     }
 
-    // ── Step 2: build bubble content ──────────────────────────────
-    const bubbleStyle = isUser
+    const isImage = hasFile && mimeType.startsWith('image/');
+
+    const bubbleClass = isUser
       ? 'rounded-tr-none bg-blue-600 text-white'
       : 'rounded-tl-none bg-white border border-gray-100 text-gray-800';
 
     return (
       <div key={msg.id} className={'flex mb-6 ' + (isUser ? 'justify-end' : 'justify-start')}>
 
-        {/* AI avatar — left side */}
         {!isUser && (
           <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-white rounded-full flex items-center justify-center mr-3 flex-shrink-0">
             <IconWrapper icon={FaRobot} className="text-white text-2xl" />
@@ -195,82 +254,47 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
         )}
 
         <div className="max-w-[80%] flex flex-col">
+          <div className={'rounded-3xl shadow-sm overflow-hidden ' + bubbleClass}>
 
-          {/* Bubble */}
-          <div className={'rounded-3xl shadow-sm overflow-hidden ' + bubbleStyle}>
-
-            {/* Image preview */}
-            {fileData !== null && fileData.mime.startsWith('image/') && (
+            {hasFile && isImage && (
               <img
-                src={fileData.url}
-                alt={fileData.name}
+                src={fileUrl}
+                alt={fileName}
                 className="w-full object-cover rounded-t-3xl"
                 style={{ maxHeight: 220, maxWidth: 300 }}
               />
             )}
 
-            {/* PDF / document card */}
-            {fileData !== null && !fileData.mime.startsWith('image/') && (
+            {hasFile && !isImage && (
               <div
                 className={'flex items-center gap-3 px-4 py-3 cursor-pointer ' + (isUser ? 'hover:bg-blue-700' : 'hover:bg-gray-50')}
-                onClick={() => {
-                  const url = fileData!.url;
-                  const mimeType = fileData!.mime;
-
-                  if (mimeType === 'application/pdf') {
-                    // ✅ Open PDF natively in browser — fl_inline handles Content-Disposition
-                    window.open(url, '_blank', 'noopener,noreferrer');
-                  } else if (
-                    mimeType === 'application/msword' ||
-                    mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                  ) {
-                    // ✅ Word docs — use Office Online viewer (works with any public URL)
-                    const officeUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`;
-                    window.open(officeUrl, '_blank', 'noopener,noreferrer');
-                  } else {
-                    // ✅ Any other file — just open directly
-                    window.open(url, '_blank', 'noopener,noreferrer');
-                  }
-                }}
+                onClick={() => window.open(fileUrl, '_blank', 'noopener,noreferrer')}
               >
                 <div className={'w-10 h-10 rounded-full flex items-center justify-center ' + (isUser ? 'bg-blue-500' : 'bg-orange-100')}>
-                  {fileData!.mime === 'application/pdf' ? (
-                    <span className="text-xl">📕</span>
-                  ) : fileData!.mime.includes('word') ? (
-                    <span className="text-xl">📝</span>
-                  ) : (
-                    <span className="text-xl">📄</span>
-                  )}
+                  <span className="text-xl">📄</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className={'text-lg font-medium truncate ' + (isUser ? 'text-white' : 'text-gray-800')}>
-                    {fileData!.name}
+                    {fileName}
                   </p>
                   <p className={'text-sm ' + (isUser ? 'text-blue-200' : 'text-gray-400')}>
-                    {fileData!.mime === 'application/pdf'
-                      ? 'PDF Document · Tap to open'
-                      : fileData!.mime.includes('word')
-                        ? 'Word Document · Tap to open'
-                        : 'File · Tap to open'}
+                    Tap to open
                   </p>
                 </div>
                 <span className={'text-xl ' + (isUser ? 'text-blue-200' : 'text-gray-400')}>↗</span>
               </div>
             )}
 
-            {/* Text */}
             {textPart.length > 0 && (
               <p className="text-xl leading-relaxed p-5">{textPart}</p>
             )}
 
-            {/* Image with no text — small bottom gap */}
-            {fileData !== null && fileData.mime.startsWith('image/') && textPart.length === 0 && (
+            {hasFile && isImage && textPart.length === 0 && (
               <div className="pb-2" />
             )}
 
           </div>
 
-          {/* Timestamp */}
           <p className={'text-lg mt-2 flex items-center gap-1 text-gray-400 ' + (isUser ? 'justify-end' : 'justify-start')}>
             {!isUser && <span>AI Assistant •</span>}
             <span>{msg.time}</span>
@@ -281,10 +305,8 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
               </>
             )}
           </p>
-
         </div>
 
-        {/* User avatar — right side */}
         {isUser && (
           <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-200 rounded-full flex items-center justify-center ml-3 flex-shrink-0">
             <span className="text-white text-lg font-bold">U</span>
@@ -372,7 +394,88 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
               className="overflow-y-auto px-6 pt-6"
               style={{ maxHeight: '420px' }}
             >
-              {messages.map(msg => this.renderMessage(msg))}
+              {messages.map(msg => (
+                <div key={msg.id}>
+                  {this.renderMessage(msg)}
+
+                  {/* Doctor cards — shown after AI message if doctors were matched */}
+                  {msg.role === 'ASSISTANT' &&
+                    msg.matchedDoctors &&
+                    msg.matchedDoctors.length > 0 && (
+                      <div className="mb-6 px-2">
+                        <p className="text-xl font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                          <span>🏥</span> Available Specialists
+                        </p>
+                        <div className="space-y-3">
+                          {msg.matchedDoctors.map(doctor => (
+                            <div key={doctor.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+
+                              {/* Doctor header */}
+                              <div className="flex items-center gap-4 mb-4">
+                                <img src={doctor.avatarUrl} alt={doctor.name} className="w-16 h-16 rounded-full object-cover" />
+                                <div className="flex-1">
+                                  <h4 className="text-xl font-bold text-gray-900">Dr. {doctor.name}</h4>
+                                  <p className="text-lg text-blue-500">{doctor.specialties[0]}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-yellow-400">⭐</span>
+                                    <span className="text-lg text-gray-600">{doctor.rating}</span>
+                                    <span className="text-gray-300">•</span>
+                                    <span className="text-lg text-gray-600">{doctor.price} QAR</span>
+                                  </div>
+                                </div>
+                                <div className={`px-3 py-1 rounded-full text-lg font-medium ${doctor.hasAvailableSlots ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'
+                                  }`}>
+                                  {doctor.hasAvailableSlots ? '✓ Available' : '✗ Busy'}
+                                </div>
+                              </div>
+
+                              {/* Center info */}
+                              <div className="bg-gray-50 rounded-xl p-3 mb-4">
+                                <p className="text-lg text-gray-600 flex items-center gap-2">
+                                  <span>📍</span>{doctor.center} — {doctor.centerCity}
+                                </p>
+                                <p className="text-lg text-gray-500 mt-1">
+                                  🌐 {doctor.languages.join(' • ')}
+                                </p>
+                              </div>
+
+                              {/* Available slots */}
+                              {doctor.hasAvailableSlots && (
+                                <div className="mb-4">
+                                  <p className="text-lg font-medium text-gray-700 mb-2">Next available slots:</p>
+                                  <div className="flex gap-2 flex-wrap">
+                                    {doctor.availableSlots.map(slot => (
+                                      <div key={slot.id} className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-lg text-blue-600">
+                                        📅 {new Date(slot.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {slot.startTime}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* No slots message */}
+                              {!doctor.hasAvailableSlots && (
+                                <p className="text-lg text-red-400 mb-4">⚠️ No available slots at this time</p>
+                              )}
+
+                              {/* Book button */}
+                              <button
+                                onClick={() => this.props.navigate?.('/book')}
+                                disabled={!doctor.hasAvailableSlots}
+                                className={`w-full py-3 rounded-xl text-xl font-semibold transition ${doctor.hasAvailableSlots
+                                    ? 'bg-blue-500 text-white hover:bg-blue-600'
+                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                  }`}
+                              >
+                                {doctor.hasAvailableSlots ? '📅 Book Appointment' : 'Not Available'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                </div>
+              ))}
 
               {/* Typing indicator */}
               {isTyping && (

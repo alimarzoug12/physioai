@@ -147,30 +147,34 @@ const _store: { items: NotificationItem[]; unread: number } = { items: [], unrea
 const _listeners_map = new Set<Listener>();
 
 function notify() {
+  if (!Array.isArray(_store.items)) _store.items = [];
   _listeners_map.forEach(fn => fn([..._store.items], _store.unread));
 }
 
 function pushToStore(item: NotificationItem) {
   // Prepend and deduplicate
+  if (!Array.isArray(_store.items)) _store.items = [];
   if (_store.items.find(i => i.id === item.id)) return;
   _store.items = [item, ..._store.items].slice(0, 50);
   _store.unread = _store.items.filter(i => !i.isRead).length;
   notify();
 }
 
-function setStoreItems(items: NotificationItem[]) {
-  _store.items = items;
-  _store.unread = items.filter(i => !i.isRead).length;
+function setStoreItems(items: NotificationItem[] | any) {
+  _store.items  = Array.isArray(items) ? items : [];
+  _store.unread = _store.items.filter(i => !i.isRead).length;
   notify();
 }
 
 function markStoreRead(id: string) {
+  if (!Array.isArray(_store.items)) _store.items = [];
   _store.items = _store.items.map(i => i.id === id ? { ...i, isRead: true } : i);
   _store.unread = _store.items.filter(i => !i.isRead).length;
   notify();
 }
 
 function markAllStoreRead() {
+  if (!Array.isArray(_store.items)) _store.items = [];
   _store.items = _store.items.map(i => ({ ...i, isRead: true }));
   _store.unread = 0;
   notify();
@@ -178,7 +182,9 @@ function markAllStoreRead() {
 
 // ── Hook ───────────────────────────────────────────────────────────
 export function useNotifications() {
-  const [notifications, _setNotifications] = useState<NotificationItem[]>([..._store.items]);
+  const [notifications, _setNotifications] = useState<NotificationItem[]>(
+    Array.isArray(_store.items) ? [..._store.items] : []
+  );
   const [unreadCount,   _setUnreadCount]   = useState(_store.unread);
   const [connected,     setConnected]      = useState(false);
   const socketRef = useRef<Socket | null>(null);
@@ -190,6 +196,11 @@ export function useNotifications() {
       _setUnreadCount(unread);
     };
     _listeners_map.add(listener);
+    listener(
+      Array.isArray(_store.items) ? _store.items : [],
+      _store.unread ?? 0,
+    );
+
     return () => { _listeners_map.delete(listener); };
   }, []);
 
@@ -201,10 +212,15 @@ export function useNotifications() {
     const socket = getSocket(token);
     socketRef.current = socket;
 
+    socket.off('connect');
+    socket.off('disconnect');
+    socket.off('notification');
+
     socket.on('connect',    () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
 
     socket.on('notification', (data: NotificationItem) => {
+      if (!data || typeof data !== 'object') return;
       pushToStore({ ...data, isRealTime: true });
 
       // Browser push notification if page is hidden
@@ -227,12 +243,13 @@ export function useNotifications() {
   const setNotifications = useCallback((
     fn: NotificationItem[] | ((prev: NotificationItem[]) => NotificationItem[])
   ) => {
+    const current = Array.isArray(_store.items) ? _store.items : [];
     const next = typeof fn === 'function' ? fn(_store.items) : fn;
     setStoreItems(next);
   }, []);
 
   const setUnreadCount = useCallback((n: number) => {
-    _store.unread = n;
+    _store.unread = typeof n === 'number' ? n : 0;
     notify();
   }, []);
 
@@ -248,6 +265,14 @@ export function useNotifications() {
     if ('Notification' in window && Notification.permission === 'default') {
       await Notification.requestPermission();
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      socketRef.current?.off('notification');
+      socketRef.current?.off('connect');
+      socketRef.current?.off('disconnect');
+    };
   }, []);
 
   return {

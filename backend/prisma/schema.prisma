@@ -22,6 +22,7 @@ model User {
   resetToken            String?
   resetTokenExpiresAt   DateTime?
   avatarUrl        String?
+  gender           String?
 
   bookings         Booking[]
   doctor           Doctor?
@@ -55,6 +56,8 @@ model Center {
   email       String?
   specialties String[]
   createdAt   DateTime @default(now())
+  latitude    Float?
+  longitude   Float?
 
   doctors     Doctor[]
 }
@@ -67,9 +70,12 @@ model Doctor {
   bio             String?
   rating          Float    @default(0)
   pricePerSession Float
-  languages       String[]
+  languages       String[] @default(["en"])
   isAvailable     Boolean  @default(true)
   avatarUrl       String?
+  latitude        Float?
+  longitude       Float?
+  yearsExperience Int?     @default(0)
 
   user            User     @relation(fields: [userId], references: [id])
   center          Center   @relation(fields: [centerId], references: [id])
@@ -106,6 +112,10 @@ model Booking {
   rescheduledAt DateTime?
   createdAt   DateTime      @default(now())
   bookedVia   BookedVia     @default(APP)
+  homeAddress   String?
+  latitude      Float?
+  longitude     Float?
+  travelFee     Float?
 
   patient     User          @relation(fields: [patientId], references: [id])
   doctor      Doctor        @relation(fields: [doctorId], references: [id])
@@ -145,6 +155,14 @@ model HealthProfile {
   activityLevel  String?  // 'Low', 'Moderate', 'High'
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  primarySymptom String?
+  chronicPain    Boolean  @default(false)
+  postSurgery    Boolean  @default(false)
+  neurologicalIssues Boolean @default(false)
+  respiratoryIssues  Boolean @default(false)
+  preferredLanguage  String?
+  maxBudget          Float?
+  preferredGender    String?
 
   user           User     @relation(fields: [userId], references: [id])
 }

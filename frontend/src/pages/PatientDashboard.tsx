@@ -85,6 +85,7 @@ interface State {
   data: DashboardData | null;
   loading: boolean;
   error: string;
+  recommendedDoctors: any[];
 }
 
 function getFirstName(fullName?: string) {
@@ -137,7 +138,7 @@ const NotificationIconButton: React.FC<{ onClick: () => void }> = ({ onClick }) 
   // Load feed count on mount
   React.useEffect(() => {
     connect();
-    const token   = localStorage.getItem('token') ?? '';
+    const token = localStorage.getItem('token') ?? '';
     const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
     fetch(`${API_URL}/notifications/feed?limit=20`, {
@@ -150,7 +151,7 @@ const NotificationIconButton: React.FC<{ onClick: () => void }> = ({ onClick }) 
         const unread = data.filter((n: any) => !n.isRead).length;
         // use the hook's setter — we need to expose it
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const count = unreadCount;
@@ -170,14 +171,15 @@ const NotificationIconButton: React.FC<{ onClick: () => void }> = ({ onClick }) 
 };
 
 class PatientDashboard extends React.Component<PatientDashboardProps, State> {
-  state: State = { data: null, loading: true, error: '' };
+  state: State = { data: null, loading: true, error: '', recommendedDoctors: [], };
 
   async componentDidMount() {
     // const { token } = this.props;
     // if (!token) { this.setState({ loading: false }); return; }
     try {
       const data = await api.getDashboard();
-      this.setState({ data: data as any, loading: false });
+      const recommendedDoctors = await api.getRecommendedDoctors(5).catch(() => []);
+      this.setState({ data: data as any, loading: false, recommendedDoctors });
     } catch (err: any) {
       this.setState({ error: err.message, loading: false });
     }
@@ -191,6 +193,7 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
     const greeting = getGreeting();
     const avatarUrl = getAvatarUrl(user?.fullName);
     const fullName = user?.fullName || 'User';
+    const firstDoctorId = data?.bookings?.[0]?.doctor?.id;
 
     // use real stats or fall back to zeros while loading
     const stats = data?.stats ?? {
@@ -424,8 +427,8 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
           <h3 className="text-2xl font-bold text-gray-900 mb-5">Quick Actions</h3>
           <div className="grid grid-cols-2 gap-5">
             {[
-              { icon: FaPlus, bg: 'bg-gradient-to-br from-blue-100 to-blue-200', color: 'text-blue-500', label: 'Book Again', sub: 'Schedule new session', path: '/book' },
-              { icon: FaUserDoctor, bg: 'bg-white', color: 'text-gray-700', label: 'My Therapists', sub: 'View your specialists', path: '/specialist/1' },
+              { icon: FaPlus, bg: 'bg-gradient-to-br from-blue-100 to-blue-200', color: 'text-blue-500', label: 'Book Again', sub: 'Schedule new session', path: data?.bookings?.[0]?.doctor?.id ? `/book/${data.bookings[0].doctor.id}` : '/specialists' },
+              { icon: FaUserDoctor, bg: 'bg-white', color: 'text-gray-700', label: 'My Therapists', sub: 'View your specialists', path: firstDoctorId ? `/specialist/${firstDoctorId}` : '/book' },
               { icon: FaHistory, bg: 'bg-gradient-to-br from-purple-100 to-purple-200', color: 'text-purple-500', label: 'Health History', sub: 'View past sessions', path: '/sessions' },
               { icon: FaWallet, bg: 'bg-gradient-to-br from-orange-100 to-orange-200', color: 'text-orange-500', label: 'Wallet', sub: 'Manage payments', path: '/wallet' },
             ].map(({ icon, bg, color, label, sub, path }) => (
@@ -460,6 +463,101 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
             className="bg-white text-blue-500 font-semibold text-xl px-4 py-3 rounded-xl flex items-center gap-3">
             <IconWrapper icon={BsChatFill} /> Start Chat
           </button>
+        </div>
+
+        {/* ✅ NOUVEAU — Recommended Doctors (à ajouter ici) */}
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold text-gray-900">Recommended For You</h3>
+            <button className="text-blue-500 text-xl">View All</button>
+          </div>
+
+          {this.state.recommendedDoctors?.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-400 text-xl">
+              No recommendations yet
+            </div>
+          )}
+
+          {this.state.recommendedDoctors?.map(doctor => (
+            <div
+              key={doctor.id}
+              className="bg-white rounded-2xl border border-gray-100 p-5 mb-4 hover:shadow-lg transition-all"
+            >
+              <div className="flex items-center gap-4 mb-3">
+                <img
+                  src={doctor.avatarUrl}
+                  alt={doctor.fullName}
+                  className="w-16 h-16 rounded-full object-cover"
+                />
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-gray-900">Dr. {doctor.fullName}</h3>
+                  <p className="text-gray-500 text-lg">{doctor.specialty}</p>
+                </div>
+
+                {/* Match score badge */}
+                <div className="flex flex-col items-center">
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl border-4 ${
+                    doctor.matchScore >= 80
+                      ? 'border-green-400 text-green-600 bg-green-50'
+                      : doctor.matchScore >= 60
+                        ? 'border-blue-400 text-blue-600 bg-blue-50'
+                        : 'border-gray-300 text-gray-500 bg-gray-50'
+                  }`}>
+                    {doctor.matchScore}%
+                  </div>
+                  <p className="text-sm text-gray-400 mt-1">Match</p>
+                </div>
+              </div>
+
+              {/* Match reasons */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {doctor.matchReasons?.map((reason: string, i: number) => (
+                  <span
+                    key={i}
+                    className="bg-blue-50 text-blue-600 text-sm px-3 py-1 rounded-full"
+                  >
+                    ✓ {reason}
+                  </span>
+                ))}
+              </div>
+
+              {/* Score breakdown bar */}
+              <div className="mb-3">
+                <div className="flex justify-between text-sm text-gray-400 mb-1">
+                  <span>Match breakdown</span>
+                  <span>{doctor.matchScore}% overall</span>
+                </div>
+                <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      doctor.matchScore >= 80
+                        ? 'bg-green-400'
+                        : doctor.matchScore >= 60
+                          ? 'bg-blue-400'
+                          : 'bg-gray-400'
+                    }`}
+                    style={{ width: `${doctor.matchScore}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 text-gray-500 text-lg">
+                  <span>⭐ {doctor.rating?.toFixed(1)}</span>
+                  <span>•</span>
+                  <span>{doctor.pricePerSession} TND</span>
+                  <span>•</span>
+                  <span>{doctor.centerCity}</span>
+                </div>
+                <button
+                  onClick={() => this.props.navigate?.(`/book/${doctor.id}`)}
+                  className="bg-blue-500 text-white px-4 py-2 rounded-xl text-lg font-medium hover:bg-blue-600 transition"
+                >
+                  Book
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Your Progress */}
@@ -602,12 +700,12 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
 
               return (
                 <div key={reminder.id} className={`rounded-2xl border p-6 flex items-center gap-4 ${isSession ? 'bg-gradient-to-r from-orange-50 to-yellow-50 border-orange-100' :
-                    isExercise ? 'bg-white border-gray-100' :
-                      'bg-white border-gray-100'
+                  isExercise ? 'bg-white border-gray-100' :
+                    'bg-white border-gray-100'
                   }`}>
                   <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl flex-shrink-0 ${isSession ? 'bg-gradient-to-br from-orange-400 to-orange-300' :
-                      isExercise ? 'bg-gradient-to-br from-blue-400 to-blue-200' :
-                        'bg-gradient-to-br from-green-400 to-green-300'
+                    isExercise ? 'bg-gradient-to-br from-blue-400 to-blue-200' :
+                      'bg-gradient-to-br from-green-400 to-green-300'
                     }`}>
                     <span className="text-3xl">
                       <IconWrapper icon={
@@ -625,8 +723,8 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
                     )}
                   </div>
                   <button className={`text-xl font-medium ${isSession ? 'text-orange-500' :
-                      isExercise ? 'text-blue-500' :
-                        'text-green-600'
+                    isExercise ? 'text-blue-500' :
+                      'text-green-600'
                     }`}>
                     {isSession ? 'Snooze' : isExercise ? 'Start' : 'Done'}
                   </button>

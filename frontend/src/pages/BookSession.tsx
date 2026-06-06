@@ -83,6 +83,13 @@ interface State {
   submitting: boolean;
   submitError: string;
   submitSuccess: boolean;
+  homeAddress: string;
+  addressError: string;
+  patientLat: number | null;
+  patientLon: number | null;
+  travelFeeEstimate: number | null;
+  distanceEstimate: number | null;
+  detectingLocation: boolean;
 }
 
 interface Props {
@@ -166,6 +173,13 @@ class BookSession extends React.Component<Props, State> {
       submitting: false,
       submitError: '',
       submitSuccess: false,
+      homeAddress: '',
+      addressError: '',
+      patientLat: null,
+      patientLon: null,
+      travelFeeEstimate: null,
+      distanceEstimate: null,
+      detectingLocation: false,
     };
   }
 
@@ -174,7 +188,8 @@ class BookSession extends React.Component<Props, State> {
 
     if (!doctorId) {
       try {
-        const doctors = await api.getDoctors();
+        const result = await api.getDoctors();
+        const doctors = result?.doctors ?? result;
         if (doctors?.length > 0) doctorId = doctors[0].id;
       } catch { }
     }
@@ -191,30 +206,57 @@ class BookSession extends React.Component<Props, State> {
     );
   }
 
+  // loadSlotsForDate = async (date: Date) => {
+  //   const doctorId = this.props.doctorId || this.state.resolvedDoctorId;
+  //   if (!doctorId) {
+  //     console.error('❌ No doctorId available');
+  //     return;
+  //   }
+
+  //   const dateStr = toDateString(date.getFullYear(), date.getMonth(), date.getDate());
+  //   this.setState({ loadingSlots: true, selectedSlotId: '', selectedSlotTime: '' });
+
+  //   try {
+  //     const token = localStorage.getItem('token') ?? '';
+  //     const response = await fetch(
+  //       `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/doctors/${doctorId}/slots?date=${dateStr}`,
+  //       { headers: { 'Authorization': `Bearer ${token}` } }
+  //     );
+
+  //     console.log('Slots response:', response.status, 'for date:', dateStr);
+
+  //     if (!response.ok) { this.setState({ slots: [], loadingSlots: false }); return; }
+
+  //     const rawSlots = await response.json();
+  //     console.log('Raw slots:', rawSlots);
+
+  //     const slots: SlotData[] = (rawSlots || []).map((slot: any) => {
+  //       const timeStr = slot.startTime || slot.time || '';
+  //       return {
+  //         id: slot.id,
+  //         time: timeStr,
+  //         endTime: slot.endTime || '',
+  //         status: slot.isBooked ? 'booked' : 'available',
+  //         period: getPeriod(timeStr),
+  //       };
+  //     });
+
+  //     this.setState({ slots, loadingSlots: false });
+  //   } catch (err) {
+  //     console.error('Slots error:', err);
+  //     this.setState({ slots: [], loadingSlots: false });
+  //   }
+  // };
+
   loadSlotsForDate = async (date: Date) => {
     const doctorId = this.props.doctorId || this.state.resolvedDoctorId;
-    if (!doctorId) {
-      console.error('❌ No doctorId available');
-      return;
-    }
+    if (!doctorId) return;
 
     const dateStr = toDateString(date.getFullYear(), date.getMonth(), date.getDate());
     this.setState({ loadingSlots: true, selectedSlotId: '', selectedSlotTime: '' });
 
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/doctors/${doctorId}/slots?date=${dateStr}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-
-      console.log('Slots response:', response.status, 'for date:', dateStr);
-
-      if (!response.ok) { this.setState({ slots: [], loadingSlots: false }); return; }
-
-      const rawSlots = await response.json();
-      console.log('Raw slots:', rawSlots);
-
+      const rawSlots = await api.getSlotsForDate(doctorId, dateStr);
       const slots: SlotData[] = (rawSlots || []).map((slot: any) => {
         const timeStr = slot.startTime || slot.time || '';
         return {
@@ -225,7 +267,6 @@ class BookSession extends React.Component<Props, State> {
           period: getPeriod(timeStr),
         };
       });
-
       this.setState({ slots, loadingSlots: false });
     } catch (err) {
       console.error('Slots error:', err);
@@ -275,11 +316,64 @@ class BookSession extends React.Component<Props, State> {
     }
   };
 
+  detectLocation = () => {
+    if (!navigator.geolocation) {
+      this.setState({ addressError: 'Geolocation not supported by your browser' });
+      return;
+    }
+    this.setState({ detectingLocation: true });
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        this.setState({ patientLat: lat, patientLon: lon });
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
+          );
+          const data = await res.json();
+          this.setState({ homeAddress: data.display_name || `${lat.toFixed(4)}, ${lon.toFixed(4)}` });
+        } catch {
+          this.setState({ homeAddress: `${lat.toFixed(4)}, ${lon.toFixed(4)}` });
+        }
+        await this.estimateTravelFee(lat, lon);
+        this.setState({ detectingLocation: false });
+      },
+      () => {
+        this.setState({
+          detectingLocation: false,
+          addressError: 'Could not get your location. Please enter your address manually.',
+        });
+      },
+      { timeout: 10000 }
+    );
+  };
+
+  estimateTravelFee = async (lat: number, lon: number) => {
+    const { doctor } = this.state;
+    if (!doctor) return;
+    try {
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/bookings/estimate-travel-fee`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ doctorId: doctor.id, latitude: lat, longitude: lon }),
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        this.setState({ travelFeeEstimate: data.travelFee, distanceEstimate: data.distanceKm });
+      }
+    } catch { }
+  };
+
   // ── Pricing ────────────────────────────────────────────────────
   getSessionFee(): number {
-    const { doctor, sessionType, sessionDuration } = this.state;
+    const { doctor, sessionType, sessionDuration, travelFeeEstimate } = this.state;
     const base = doctor?.pricePerSession ?? 200;
-    const homeExtra = sessionType === 'home' ? 80 : 0;
+    const homeExtra = sessionType === 'home' ? (travelFeeEstimate ?? 80) : 0;
     const durExtra = sessionDuration === '90' ? 100 : 0;
     return base + homeExtra + durExtra;
   }
@@ -369,6 +463,15 @@ class BookSession extends React.Component<Props, State> {
         notes,
         requirements: checkedReqs,
         totalAmount: this.getTotal(),
+        homeAddress: sessionType === 'home' && this.state.homeAddress.trim()
+          ? this.state.homeAddress.trim()
+          : undefined,
+        latitude: sessionType === 'home' && this.state.patientLat !== null
+          ? this.state.patientLat
+          : undefined,
+        longitude: sessionType === 'home' && this.state.patientLon !== null
+          ? this.state.patientLon
+          : undefined,
       });
 
       // Wallet or cash — already confirmed by backend, go to sessions
@@ -576,6 +679,61 @@ class BookSession extends React.Component<Props, State> {
               );
             })}
           </div>
+
+          {/* ── Home Address Input (only for home visits) ── */}
+          {sessionType === 'home' && (
+            <div className="mt-5 p-5 bg-purple-50 border border-purple-200 rounded-2xl">
+              <h4 className="font-bold text-xl text-gray-900 mb-3">
+                📍 Your Address for Home Visit
+              </h4>
+
+              <input
+                type="text"
+                value={this.state.homeAddress}
+                onChange={e => this.setState({
+                  homeAddress: e.target.value,
+                  addressError: '',
+                })}
+                placeholder="Enter your full address (Street, Building, City)"
+                className="w-full px-5 py-4 text-xl border-2 border-purple-200 rounded-2xl focus:outline-none focus:border-purple-500 mb-3"
+              />
+
+              {/* Get GPS coordinates button */}
+              <button
+                onClick={this.detectLocation}
+                disabled={this.state.detectingLocation}
+                className="w-full py-3 bg-purple-100 text-purple-700 rounded-xl text-lg font-medium hover:bg-purple-200 transition flex items-center justify-center gap-2"
+              >
+                {this.state.detectingLocation ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                    Detecting location...
+                  </>
+                ) : (
+                  '📡 Use My Current Location'
+                )}
+              </button>
+
+              {/* Travel fee estimate */}
+              {this.state.travelFeeEstimate !== null && (
+                <div className="mt-3 bg-white border border-purple-200 rounded-xl p-4">
+                  <p className="text-purple-700 text-lg font-medium">
+                    🚗 Travel fee: <strong>{this.state.travelFeeEstimate} QAR</strong>
+                    {this.state.distanceEstimate && (
+                      <span className="text-gray-500 font-normal ml-2">
+                        ({this.state.distanceEstimate} km from clinic)
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {this.state.addressError && (
+                <p className="text-red-500 text-lg mt-2">{this.state.addressError}</p>
+              )}
+            </div>
+          )}
+
         </div>
 
         {/* ── Calendar ── */}

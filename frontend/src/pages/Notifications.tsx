@@ -22,38 +22,38 @@ const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string 
 
 // ── Real-time notification card ────────────────────────────────────
 const TYPE_ICON_MAP: Record<string, React.ReactNode> = {
-  BOOKING_CONFIRMED:   <IconWrapper icon={FaCheck}/>,
-  BOOKING_CANCELLED:   '❌',
+  BOOKING_CONFIRMED: <IconWrapper icon={FaCheck} />,
+  BOOKING_CANCELLED: '❌',
   BOOKING_RESCHEDULED: '📅',
-  NEW_BOOKING:         '🆕',
-  PAYMENT_SUCCESS:     '💳',
-  PAYMENT_FAILED:      '⚠️',
-  SESSION_REMINDER:    '⏰',
-  ACHIEVEMENT:         '🏆',
-  EXERCISE:            '💪',
-  GENERAL:             '🔔',
+  NEW_BOOKING: '🆕',
+  PAYMENT_SUCCESS: '💳',
+  PAYMENT_FAILED: '⚠️',
+  SESSION_REMINDER: '⏰',
+  ACHIEVEMENT: '🏆',
+  EXERCISE: '💪',
+  GENERAL: '🔔',
 };
 
 const TYPE_COLOR_MAP: Record<string, string> = {
-  BOOKING_CONFIRMED:   'bg-green-500',
-  BOOKING_CANCELLED:   'bg-red-500',
+  BOOKING_CONFIRMED: 'bg-green-500',
+  BOOKING_CANCELLED: 'bg-red-500',
   BOOKING_RESCHEDULED: 'bg-blue-500',
-  NEW_BOOKING:         'bg-indigo-500',
-  PAYMENT_SUCCESS:     'bg-emerald-500',
-  PAYMENT_FAILED:      'bg-orange-500',
-  SESSION_REMINDER:    'bg-blue-600',
-  ACHIEVEMENT:         'bg-yellow-400',
-  EXERCISE:            'bg-orange-500',
-  GENERAL:             'bg-gray-500',
+  NEW_BOOKING: 'bg-indigo-500',
+  PAYMENT_SUCCESS: 'bg-emerald-500',
+  PAYMENT_FAILED: 'bg-orange-500',
+  SESSION_REMINDER: 'bg-blue-600',
+  ACHIEVEMENT: 'bg-yellow-400',
+  EXERCISE: 'bg-orange-500',
+  GENERAL: 'bg-gray-500',
 };
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1)  return 'Just now';
+  if (mins < 1) return 'Just now';
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24)  return `${hrs}h ago`;
+  if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
@@ -114,13 +114,13 @@ interface NotificationsData {
 
 // ── Main component (functional, replaces class) ────────────────────
 export default function NotificationsWithRouter() {
-  const navigate    = useNavigate();
-  const { token }   = useAuth();
+  const navigate = useNavigate();
+  const { token } = useAuth();
 
   // Static page data from REST
-  const [pageData,  setPageData]  = React.useState<NotificationsData | null>(null);
-  const [loading,   setLoading]   = React.useState(true);
-  const [error,     setError]     = React.useState('');
+  const [pageData, setPageData] = React.useState<NotificationsData | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
 
   // Real-time notifications from WebSocket (shared with bell)
   const {
@@ -152,10 +152,15 @@ export default function NotificationsWithRouter() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : [])
-      .then((data: NotificationItem[]) => {
-        setNotifications(data);
+      .then((data: any) => {
+        const list: NotificationItem[] = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
+        setNotifications(list);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleMarkAllRead = () => {
@@ -165,7 +170,7 @@ export default function NotificationsWithRouter() {
     fetch(`${API_URL}/notifications/read-all`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => {});
+    }).catch(() => { });
   };
 
   const handleMarkOneRead = (n: NotificationItem) => {
@@ -176,11 +181,11 @@ export default function NotificationsWithRouter() {
     fetch(`${API_URL}/notifications/${n.id}/read`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => {});
+    }).catch(() => { });
   };
 
   const journey = pageData?.healthJourney;
-  const week    = pageData?.weekProgress;
+  const week = pageData?.weekProgress;
 
   // Total new = unread real-time + page static new count
   const staticNewCount = pageData?.todaysUpdates.filter(u => u.isNew).length ?? 0;
@@ -304,15 +309,13 @@ export default function NotificationsWithRouter() {
                     <div
                       key={n.id}
                       onClick={() => handleMarkOneRead(n)}
-                      className={`bg-white rounded-2xl border p-6 cursor-pointer transition hover:shadow-md ${
-                        !n.isRead ? 'border-blue-200 bg-blue-50/30' : 'border-gray-100'
-                      }`}
+                      className={`bg-white rounded-2xl border p-6 cursor-pointer transition hover:shadow-md ${!n.isRead ? 'border-blue-200 bg-blue-50/30' : 'border-gray-100'
+                        }`}
                     >
                       <div className="flex items-start gap-4">
                         {/* Icon */}
-                        <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl flex-shrink-0 ${
-                          TYPE_COLOR_MAP[n.type] ?? 'bg-gray-500'
-                        }`}>
+                        <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl flex-shrink-0 ${TYPE_COLOR_MAP[n.type] ?? 'bg-gray-500'
+                          }`}>
                           {TYPE_ICON_MAP[n.type] ?? '🔔'}
                         </div>
 
@@ -367,15 +370,14 @@ export default function NotificationsWithRouter() {
               {pageData?.todaysUpdates.map((update, idx) => (
                 <div key={idx} className="bg-white rounded-2xl border border-gray-100 p-6">
                   <div className="flex items-start gap-4">
-                    <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-xl flex-shrink-0 ${
-                      update.type === 'SESSION_REMINDER' ? 'bg-blue-600' :
-                      update.type === 'ACHIEVEMENT'      ? 'bg-yellow-400' :
-                                                           'bg-orange-500'
-                    }`}>
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-xl flex-shrink-0 ${update.type === 'SESSION_REMINDER' ? 'bg-blue-600' :
+                        update.type === 'ACHIEVEMENT' ? 'bg-yellow-400' :
+                          'bg-orange-500'
+                      }`}>
                       <IconWrapper icon={
                         update.type === 'SESSION_REMINDER' ? FaCalendarAlt :
-                        update.type === 'ACHIEVEMENT'      ? BiSolidAward  :
-                                                             FaDumbbell
+                          update.type === 'ACHIEVEMENT' ? BiSolidAward :
+                            FaDumbbell
                       } />
                     </div>
 
@@ -610,13 +612,12 @@ export default function NotificationsWithRouter() {
               {pageData?.reminders.map(reminder => (
                 <div key={reminder.id} className="bg-white rounded-2xl border border-gray-200 p-6">
                   <div className="flex items-center gap-4 mb-4">
-                    <span className={`text-2xl ${
-                      reminder.type === 'SESSION'    ? 'text-blue-500' :
-                      reminder.type === 'MEDICATION' ? 'text-gray-700' : 'text-orange-500'
-                    }`}>
+                    <span className={`text-2xl ${reminder.type === 'SESSION' ? 'text-blue-500' :
+                        reminder.type === 'MEDICATION' ? 'text-gray-700' : 'text-orange-500'
+                      }`}>
                       <IconWrapper icon={
-                        reminder.type === 'SESSION'    ? FaCalendarCheck :
-                        reminder.type === 'MEDICATION' ? FaPills : FaDumbbell
+                        reminder.type === 'SESSION' ? FaCalendarCheck :
+                          reminder.type === 'MEDICATION' ? FaPills : FaDumbbell
                       } />
                     </span>
                     <div className="flex-1 flex justify-between items-center">
@@ -656,7 +657,7 @@ export default function NotificationsWithRouter() {
               <div className="flex items-center gap-4 mb-4">
                 <div className="flex">
                   <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="u1" className="w-12 h-12 rounded-full border-2 border-white object-cover" />
-                  <img src="https://randomuser.me/api/portraits/men/45.jpg"   alt="u2" className="w-12 h-12 rounded-full border-2 border-white object-cover -ml-3" />
+                  <img src="https://randomuser.me/api/portraits/men/45.jpg" alt="u2" className="w-12 h-12 rounded-full border-2 border-white object-cover -ml-3" />
                   <img src="https://randomuser.me/api/portraits/women/65.jpg" alt="u3" className="w-12 h-12 rounded-full border-2 border-white object-cover -ml-3" />
                   <span className="w-12 h-12 rounded-full bg-gray-200 text-gray-600 text-lg font-medium flex items-center justify-center -ml-3 border-2 border-white">+12</span>
                 </div>
@@ -685,10 +686,10 @@ export default function NotificationsWithRouter() {
             <h3 className="text-3xl font-bold text-gray-900 mb-5">Quick Actions</h3>
             <div className="grid grid-cols-2 gap-4">
               {[
-                { icon: FaPlus,         bg: 'bg-gradient-to-br from-blue-500 to-blue-600',     label: 'Log Symptoms',  path: null       },
-                { icon: GiProgression,  bg: 'bg-gray-100',                                     label: 'View Progress', textColor: 'text-gray-600', path: '/sessions' },
-                { icon: FaCalendarPlus, bg: 'bg-gradient-to-br from-orange-500 to-orange-600', label: 'Book Session',  path: '/book'    },
-                { icon: FaComments,     bg: 'bg-gradient-to-br from-purple-500 to-purple-600', label: 'AI Chat',       path: '/ai-assistant' },
+                { icon: FaPlus, bg: 'bg-gradient-to-br from-blue-500 to-blue-600', label: 'Log Symptoms', path: null },
+                { icon: GiProgression, bg: 'bg-gray-100', label: 'View Progress', textColor: 'text-gray-600', path: '/sessions' },
+                { icon: FaCalendarPlus, bg: 'bg-gradient-to-br from-orange-500 to-orange-600', label: 'Book Session', path: '/book' },
+                { icon: FaComments, bg: 'bg-gradient-to-br from-purple-500 to-purple-600', label: 'AI Chat', path: '/ai-assistant' },
               ].map(({ icon, bg, label, textColor, path }) => (
                 <button key={label} onClick={() => path && navigate(path)}
                   className="bg-white rounded-2xl border border-gray-100 p-6 flex flex-col items-center gap-3">
