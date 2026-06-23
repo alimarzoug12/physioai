@@ -640,4 +640,38 @@ export class BookingsService {
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
+
+  async confirmBooking(bookingId: string, doctorId: string) {
+    const booking = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: 'CONFIRMED' },
+      include: {
+        patient: true,
+        doctor: { include: { user: true, center: true } },
+        slot: true,
+      },
+    });
+
+    // ✅ Match exact BookingConfirmationData interface
+    await this.mail.sendBookingConfirmation({
+      patientName: booking.patient.fullName,
+      patientEmail: booking.patient.email,          // ✅ patientEmail not to
+      doctorName: booking.doctor.user.fullName,
+      specialty: booking.doctor.specialties[0] ?? 'Physiotherapy',
+      sessionDate: new Date(booking.slot.date).toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric',
+      }),
+      sessionTime: booking.slot.startTime,
+      sessionType: booking.sessionType === 'HOME_VISIT' ? 'Home Visit' : 'Clinic Visit',
+      centerName: booking.doctor.center?.name ?? '',  // ✅ centerName not center
+      centerAddress: booking.doctor.center?.address ?? '',
+      duration: 60,
+      totalAmount: booking.totalAmount ?? 0,
+      currency: 'QAR',
+      bookingId: booking.id,
+    });
+
+    this.logger.log(`✅ Booking ${bookingId} confirmed — email sent to ${booking.patient.email}`);
+    return booking;
+  }
 }

@@ -11,7 +11,7 @@ const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min
 
 async function main() {
   console.log('🌱 Starting rich seed...');
-//this makes all the user accounts verified to avoid email verification step during testing and development******
+  //this makes all the user accounts verified to avoid email verification step during testing and development******
   await prisma.user.updateMany({
     where: { emailVerified: false },
     data: { emailVerified: true },
@@ -128,6 +128,22 @@ async function main() {
     { email: 'abdulla@physioai.qa', fullName: 'Abdulla Al-Fayez', phone: '+974 5556 0015', age: '26-35', gender: 'male', backPain: true, activityLevel: 'Moderate', balance: 980.00, points: 980 },
     { email: 'shaikha@physioai.qa', fullName: 'Shaikha Al-Romaihi', phone: '+974 5556 0016', age: '36-45', gender: 'female', jointPain: true, activityLevel: 'Moderate', balance: 3100.00, points: 3100 },
   ];
+
+  // ── Admin user ──────────────────────────────────────────────────
+  const adminPwd = await bcrypt.hash('admin123', 10);
+
+  await prisma.user.create({
+    data: {
+      email: 'admin@physioai.qa',
+      passwordHash: adminPwd,
+      fullName: 'PhysioAI Admin',
+      role: 'ADMIN',
+      phone: '+974 4000 0000',
+      emailVerified: true,
+    provider: 'email',
+    },
+  });
+  console.log('✅ Admin user created');
 
   const patients: any[] = [];
   for (const p of patientData) {

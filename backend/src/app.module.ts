@@ -22,6 +22,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { AdminModule } from './admin/admin.module';
+import { BookingCleanupService } from './bookings/booking-cleanup.service';
 
 @Module({
   imports: [
@@ -57,6 +58,6 @@ import { AdminModule } from './admin/admin.module';
     AdminModule,
   ],
   // NO AppController, NO AppService here
-  providers: [PrismaService, TokenCleanupService],
+  providers: [PrismaService, TokenCleanupService, BookingCleanupService],
 })
 export class AppModule {}

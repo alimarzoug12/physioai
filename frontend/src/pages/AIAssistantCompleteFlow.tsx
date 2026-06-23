@@ -22,14 +22,15 @@ const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string 
 interface MatchedDoctor {
   id: string;
   name: string;
-  specialties: string[];
+  specialties?: string[];
+  specialty?: string;
   rating: number;
   price: number;
   center: string;
-  centerAddress: string;
-  centerCity: string;
-  languages: string[];
-  bio: string;
+  centerAddress?: string;
+  centerCity?: string;
+  languages?: string[];
+  bio?: string;
   isAvailable: boolean;
   avatarUrl: string;
   availableSlots: Array<{
@@ -138,6 +139,13 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
 
       const data = await response.json();
 
+      // ── TEMP DEBUG — remove after fixing ───────────────────────
+      console.log('=== FULL API RESPONSE ===');
+      console.log(JSON.stringify(data, null, 2));
+      console.log('matchedDoctors:', data.matchedDoctors);
+      console.log('matchedDoctors length:', data.matchedDoctors?.length);
+      console.log('=========================');
+
       const reply =
         data.assistantMessage?.content
         || data.reply
@@ -211,6 +219,13 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
     }
     e.target.value = '';
   };
+
+  getSpecialty(doctor: MatchedDoctor): string {
+    if (doctor.specialties && doctor.specialties.length > 0) {
+      return doctor.specialties[0];
+    }
+    return doctor.specialty || 'Physiotherapy';
+  }
 
   renderMessage(msg: Message) {
     // ✅ Safety guard — if content is undefined or null, skip rendering
@@ -407,70 +422,75 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
                           <span>🏥</span> Available Specialists
                         </p>
                         <div className="space-y-3">
-                          {msg.matchedDoctors.map(doctor => (
-                            <div key={doctor.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                          {msg.matchedDoctors.map(doctor => {
+                            if (!doctor || !doctor.id) return null;  // ← safety guard
+                            return (
+                              <div key={doctor.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
 
-                              {/* Doctor header */}
-                              <div className="flex items-center gap-4 mb-4">
-                                <img src={doctor.avatarUrl} alt={doctor.name} className="w-16 h-16 rounded-full object-cover" />
-                                <div className="flex-1">
-                                  <h4 className="text-xl font-bold text-gray-900">Dr. {doctor.name}</h4>
-                                  <p className="text-lg text-blue-500">{doctor.specialties[0]}</p>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-yellow-400">⭐</span>
-                                    <span className="text-lg text-gray-600">{doctor.rating}</span>
-                                    <span className="text-gray-300">•</span>
-                                    <span className="text-lg text-gray-600">{doctor.price} QAR</span>
+                                {/* Doctor header */}
+                                <div className="flex items-center gap-4 mb-4">
+                                  <img src={doctor.avatarUrl} alt={doctor.name} className="w-16 h-16 rounded-full object-cover" />
+                                  <div className="flex-1">
+                                    <h4 className="text-xl font-bold text-gray-900">Dr. {doctor.name}</h4>
+                                    <p className="text-lg text-blue-500">
+                                      {this.getSpecialty(doctor)}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="text-yellow-400">⭐</span>
+                                      <span className="text-lg text-gray-600">{doctor.rating}</span>
+                                      <span className="text-gray-300">•</span>
+                                      <span className="text-lg text-gray-600">{doctor.price} QAR</span>
+                                    </div>
+                                  </div>
+                                  <div className={`px-3 py-1 rounded-full text-lg font-medium ${doctor.hasAvailableSlots ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'
+                                    }`}>
+                                    {doctor.hasAvailableSlots ? '✓ Available' : '✗ Busy'}
                                   </div>
                                 </div>
-                                <div className={`px-3 py-1 rounded-full text-lg font-medium ${doctor.hasAvailableSlots ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'
-                                  }`}>
-                                  {doctor.hasAvailableSlots ? '✓ Available' : '✗ Busy'}
+
+                                {/* Center info */}
+                                <div className="bg-gray-50 rounded-xl p-3 mb-4">
+                                  <p className="text-lg text-gray-600 flex items-center gap-2">
+                                    <span>📍</span>{doctor.center} — {doctor.centerCity}
+                                  </p>
+                                  <p className="text-lg text-gray-500 mt-1">
+                                    🌐 {doctor.languages?.join(' • ') || 'Arabic, English'}
+                                  </p>
                                 </div>
-                              </div>
 
-                              {/* Center info */}
-                              <div className="bg-gray-50 rounded-xl p-3 mb-4">
-                                <p className="text-lg text-gray-600 flex items-center gap-2">
-                                  <span>📍</span>{doctor.center} — {doctor.centerCity}
-                                </p>
-                                <p className="text-lg text-gray-500 mt-1">
-                                  🌐 {doctor.languages.join(' • ')}
-                                </p>
-                              </div>
-
-                              {/* Available slots */}
-                              {doctor.hasAvailableSlots && (
-                                <div className="mb-4">
-                                  <p className="text-lg font-medium text-gray-700 mb-2">Next available slots:</p>
-                                  <div className="flex gap-2 flex-wrap">
-                                    {doctor.availableSlots.map(slot => (
-                                      <div key={slot.id} className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-lg text-blue-600">
-                                        📅 {new Date(slot.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {slot.startTime}
-                                      </div>
-                                    ))}
+                                {/* Available slots */}
+                                {doctor.hasAvailableSlots && (
+                                  <div className="mb-4">
+                                    <p className="text-lg font-medium text-gray-700 mb-2">Next available slots:</p>
+                                    <div className="flex gap-2 flex-wrap">
+                                      {doctor.availableSlots.map(slot => (
+                                        <div key={slot.id} className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-lg text-blue-600">
+                                          📅 {slot.date ? new Date(slot.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'TBD'} at {slot.startTime}
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
 
-                              {/* No slots message */}
-                              {!doctor.hasAvailableSlots && (
-                                <p className="text-lg text-red-400 mb-4">⚠️ No available slots at this time</p>
-                              )}
+                                {/* No slots message */}
+                                {!doctor.hasAvailableSlots && (
+                                  <p className="text-lg text-red-400 mb-4">⚠️ No available slots at this time</p>
+                                )}
 
-                              {/* Book button */}
-                              <button
-                                onClick={() => this.props.navigate?.('/book')}
-                                disabled={!doctor.hasAvailableSlots}
-                                className={`w-full py-3 rounded-xl text-xl font-semibold transition ${doctor.hasAvailableSlots
+                                {/* Book button */}
+                                <button
+                                  onClick={() => this.props.navigate?.('/book')}
+                                  disabled={!doctor.hasAvailableSlots}
+                                  className={`w-full py-3 rounded-xl text-xl font-semibold transition ${doctor.hasAvailableSlots
                                     ? 'bg-blue-500 text-white hover:bg-blue-600'
                                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                  }`}
-                              >
-                                {doctor.hasAvailableSlots ? '📅 Book Appointment' : 'Not Available'}
-                              </button>
-                            </div>
-                          ))}
+                                    }`}
+                                >
+                                  {doctor.hasAvailableSlots ? '📅 Book Appointment' : 'Not Available'}
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}

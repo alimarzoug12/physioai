@@ -285,6 +285,11 @@ model ChatSession {
   id        String    @id @default(uuid())
   userId    String
   title     String    @default("New Chat")
+  bookingState String @default("IDLE")
+  // States: IDLE | AWAITING_DAY | SHOWING_DOCTORS | AWAITING_CONFIRMATION
+  pendingDay    String?
+  pendingDoctorId String?
+  pendingSlotId   String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

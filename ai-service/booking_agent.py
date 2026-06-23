@@ -1,50 +1,69 @@
 # booking_agent.py
+import os
 from typing import TypedDict, Optional, List
 from langgraph.graph import StateGraph, END
-from langchain_ollama import ChatOllama
-from langchain.schema import SystemMessage, HumanMessage
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
 import httpx
-import json
+from dotenv import load_dotenv
 
-llm = ChatOllama(model="llama3.2:3b", temperature=0)
+load_dotenv()
+
+# ── LLM for the booking agent (cheaper model for classification) ──
+llm = ChatOpenAI(
+    model="gpt-3.5-turbo",
+    temperature=0,
+    max_tokens=50,          # intent detection needs very short replies
+    api_key=os.getenv("OPENAI_API_KEY"),
+)
+
+print("✅ LangGraph booking agent LLM initialized (OpenAI)")
 
 
-# ── State ─────────────────────────────────────────────────────
+# ── State definition ──────────────────────────────────────────
 class BookingState(TypedDict):
-    user_id: str
-    token: str
+    user_id:      str
+    token:        str
     user_message: str
-    intent: str              # 'booking' | 'cancel' | 'info' | 'general'
-    specialty: Optional[str]
-    doctor_id: Optional[str]
-    slot_id: Optional[str]
-    date: Optional[str]
-    time: Optional[str]
-    confirmed: bool
-    reply: str
-    doctors: List[dict]
-    slots: List[dict]
-    nestjs_url: str
+    intent:       str        # 'booking' | 'cancel' | 'info' | 'general'
+    specialty:    Optional[str]
+    doctor_id:    Optional[str]
+    slot_id:      Optional[str]
+    date:         Optional[str]
+    time:         Optional[str]
+    confirmed:    bool
+    reply:        str
+    doctors:      List[dict]
+    slots:        List[dict]
+    nestjs_url:   str
 
 
 # ── Node 1: Detect intent ─────────────────────────────────────
 async def detect_intent(state: BookingState) -> BookingState:
-    prompt = f"""
-Classify this message into ONE of these intents:
-- booking (user wants to book a session)
-- cancel (user wants to cancel a session)
-- info (user asking about services/prices/availability)
-- general (general health question)
+    """
+    Classify the user message into one of 4 intents.
+    Works for Arabic, English, and French.
+    """
+    prompt = f"""Classify this message into ONE of these intents:
+- booking  (user wants to book/reserve/schedule a physiotherapy session)
+- cancel   (user wants to cancel a session)
+- info     (user asking about prices, availability, services)
+- general  (general health question or other)
 
 Message: "{state['user_message']}"
 
-Reply with ONLY one word: booking, cancel, info, or general
-"""
-    response = await llm.ainvoke([HumanMessage(content=prompt)])
-    intent = response.content.strip().lower()
+Reply with ONLY one word: booking, cancel, info, or general"""
 
-    if intent not in ['booking', 'cancel', 'info', 'general']:
-        intent = 'general'
+    try:
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        intent = response.content.strip().lower().split()[0]  # take first word only
+
+        if intent not in ["booking", "cancel", "info", "general"]:
+            intent = "general"
+
+    except Exception as e:
+        print(f"❌ Intent detection error: {e}")
+        intent = "general"
 
     print(f"🎯 Intent detected: {intent}")
     return {**state, "intent": intent}
@@ -52,72 +71,78 @@ Reply with ONLY one word: booking, cancel, info, or general
 
 # ── Node 2: Find doctors by specialty ─────────────────────────
 async def find_doctors(state: BookingState) -> BookingState:
-    if state['intent'] != 'booking':
+    """Extract specialty and fetch real doctors from NestJS."""
+    if state["intent"] != "booking":
         return state
 
     # Extract specialty from message
-    prompt = f"""
-From this message, what medical specialty is needed?
-Choose from: Musculoskeletal, Sports Medicine, Neurological, 
-Orthopedic, Pediatric, Pain Management, Rehabilitation
+    specialty_prompt = f"""From this patient message, which physiotherapy specialty is needed?
+Choose ONLY from: Musculoskeletal, Sports Medicine, Neurological, Orthopedic, Pediatric, Pain Management, Rehabilitation
 
-Message: "{state['user_message']}"
+Patient message: "{state['user_message']}"
 
-Reply with ONLY the specialty name, or "Musculoskeletal" if unsure.
-"""
-    response = await llm.ainvoke([HumanMessage(content=prompt)])
-    specialty = response.content.strip()
+Reply with ONLY the specialty name. If unsure, reply: Musculoskeletal"""
 
-    # Call NestJS to get doctors
+    try:
+        response  = await llm.ainvoke([HumanMessage(content=specialty_prompt)])
+        specialty = response.content.strip()
+        if specialty not in ["Musculoskeletal", "Sports Medicine", "Neurological",
+                             "Orthopedic", "Pediatric", "Pain Management", "Rehabilitation"]:
+            specialty = "Musculoskeletal"
+    except Exception:
+        specialty = "Musculoskeletal"
+
+    # Fetch real doctors from NestJS
+    doctors = []
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
                 f"{state['nestjs_url']}/doctors",
                 params={"specialty": specialty},
-                headers={"Authorization": f"Bearer {state['token']}"}
+                headers={"Authorization": f"Bearer {state['token']}"},
             )
             if resp.status_code == 200:
                 doctors = resp.json()[:3]
-            else:
-                doctors = []
+                print(f"✅ Found {len(doctors)} doctors for {specialty}")
     except Exception as e:
         print(f"❌ Error fetching doctors: {e}")
-        doctors = []
 
-    reply = f"I found {len(doctors)} specialist(s) for {specialty}. "
+    # Build reply
     if doctors:
-        reply += "Here are the available doctors:\n"
+        reply = f"I found {len(doctors)} specialist(s) in {specialty}:\n"
         for i, d in enumerate(doctors, 1):
-            reply += f"{i}. Dr. {d.get('fullName', 'Unknown')} — {d.get('rating', 'N/A')}⭐ — {d.get('price', 'N/A')} QAR\n"
+            name    = d.get("fullName", d.get("name", "Unknown"))
+            rating  = d.get("rating", "N/A")
+            price   = d.get("price", d.get("pricePerSession", "N/A"))
+            reply  += f"{i}. Dr. {name} — ⭐{rating} — {price} QAR\n"
         reply += "\nWhich doctor would you like to book with?"
     else:
-        reply += "Please browse available doctors in the app."
+        reply = f"I can help you find a {specialty} specialist. Please browse available doctors below."
 
     return {**state, "specialty": specialty, "doctors": doctors, "reply": reply}
 
 
 # ── Node 3: Check available slots ────────────────────────────
 async def check_slots(state: BookingState) -> BookingState:
-    if not state.get('doctor_id') or not state.get('date'):
+    """Fetch available slots for a specific doctor and date."""
+    if not state.get("doctor_id") or not state.get("date"):
         return state
 
+    slots = []
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
                 f"{state['nestjs_url']}/doctors/{state['doctor_id']}/slots",
-                params={"date": state['date']},
-                headers={"Authorization": f"Bearer {state['token']}"}
+                params={"date": state["date"]},
+                headers={"Authorization": f"Bearer {state['token']}"},
             )
             if resp.status_code == 200:
                 slots = resp.json()
-            else:
-                slots = []
     except Exception as e:
         print(f"❌ Error fetching slots: {e}")
-        slots = []
 
     if slots:
-        reply = f"Available slots on {state['date']}:\n"
+        reply  = f"Available slots on {state['date']}:\n"
         for slot in slots[:5]:
             reply += f"• {slot.get('startTime')} – {slot.get('endTime')}\n"
         reply += "\nWhich time works for you?"
@@ -127,23 +152,23 @@ async def check_slots(state: BookingState) -> BookingState:
     return {**state, "slots": slots, "reply": reply}
 
 
-# ── Node 4: Confirm booking ───────────────────────────────────
+# ── Node 4: Ask for confirmation ──────────────────────────────
 async def confirm_booking(state: BookingState) -> BookingState:
-    if not state.get('slot_id'):
+    if not state.get("slot_id"):
         return state
 
     reply = (
         f"To confirm your booking:\n"
         f"📅 Date: {state.get('date')}\n"
-        f"🕐 Time: {state.get('time')}\n"
-        f"Do you confirm? (yes/no)"
+        f"🕐 Time: {state.get('time')}\n\n"
+        f"Reply 'yes' to confirm or 'no' to cancel."
     )
     return {**state, "reply": reply}
 
 
 # ── Node 5: Create booking ────────────────────────────────────
 async def create_booking(state: BookingState) -> BookingState:
-    if not state.get('confirmed') or not state.get('slot_id'):
+    if not state.get("confirmed") or not state.get("slot_id"):
         return state
 
     try:
@@ -151,11 +176,11 @@ async def create_booking(state: BookingState) -> BookingState:
             resp = await client.post(
                 f"{state['nestjs_url']}/bookings",
                 json={
-                    "doctorId": state['doctor_id'],
-                    "slotId": state['slot_id'],
+                    "doctorId":    state["doctor_id"],
+                    "slotId":      state["slot_id"],
                     "sessionType": "CLINIC",
                 },
-                headers={"Authorization": f"Bearer {state['token']}"}
+                headers={"Authorization": f"Bearer {state['token']}"},
             )
             if resp.status_code == 201:
                 reply = "✅ Your appointment has been successfully booked! You will receive a confirmation shortly."
@@ -168,23 +193,21 @@ async def create_booking(state: BookingState) -> BookingState:
     return {**state, "reply": reply}
 
 
-# ── Node: General response ────────────────────────────────────
+# ── Node: General (fallback) ──────────────────────────────────
 async def general_response(state: BookingState) -> BookingState:
-    return {**state, "reply": ""}  # handled by main chat in main.py
+    """Fallback — reply is empty, main.py handles it with regular chat."""
+    return {**state, "reply": ""}
 
 
-# ── Router: decide next node based on intent ──────────────────
+# ── Router ────────────────────────────────────────────────────
 def route_intent(state: BookingState) -> str:
-    intent = state.get('intent', 'general')
-    if intent == 'booking':
-        return 'find_doctors'
-    elif intent == 'cancel':
-        return 'general_response'
-    else:
-        return 'general_response'
+    intent = state.get("intent", "general")
+    if intent == "booking":
+        return "find_doctors"
+    return "general_response"
 
 
-# ── Build the LangGraph ───────────────────────────────────────
+# ── Build LangGraph ───────────────────────────────────────────
 def build_booking_graph():
     graph = StateGraph(BookingState)
 
@@ -206,14 +229,14 @@ def build_booking_graph():
         }
     )
 
-    graph.add_edge("find_doctors",    "check_slots")
-    graph.add_edge("check_slots",     "confirm_booking")
-    graph.add_edge("confirm_booking", "create_booking")
-    graph.add_edge("create_booking",  END)
+    graph.add_edge("find_doctors",     "check_slots")
+    graph.add_edge("check_slots",      "confirm_booking")
+    graph.add_edge("confirm_booking",  "create_booking")
+    graph.add_edge("create_booking",   END)
     graph.add_edge("general_response", END)
 
     return graph.compile()
 
 
 booking_graph = build_booking_graph()
-print("✅ LangGraph booking agent initialized")
+print("✅ LangGraph booking graph compiled")
