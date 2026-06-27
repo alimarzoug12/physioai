@@ -19,6 +19,12 @@ export class BookingsController {
   getOne(@Param('id') id: string, @Req() req: any) {
     return this.bookingsService.getBookingById(id, req.user.userId);
   }
+
+@Get('pending')
+  getPending(@Req() req: any) {
+    return this.bookingsService.getPendingBookingsForDoctor(req.user.userId);
+  }
+
   @Get()
   getAll(
     @Req() req: any,
@@ -55,6 +61,21 @@ export class BookingsController {
     @Body() dto: RescheduleBookingDto,
   ) {
     return this.bookingsService.rescheduleBooking(id, req.user.userId, dto);
+  }
+
+  @Patch(':id/confirm')
+  confirm(@Param('id') id: string, @Req() req: any) {
+    return this.bookingsService.confirmBookingByDoctor(id, req.user.userId);
+  }
+
+  // ✅ NEW — doctor rejects a pending booking
+  @Patch(':id/reject')
+  reject(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() body: { reason?: string },
+  ) {
+    return this.bookingsService.rejectBookingByDoctor(id, req.user.userId, body?.reason);
   }
 
   // POST /bookings/estimate-travel-fee

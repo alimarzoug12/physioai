@@ -38,7 +38,7 @@ interface DashboardData {
   recentMessages: { id: string; patientName: string; patientAvatar: string; message: string; time: string; tag: string }[];
 }
 
-interface State { sidebarOpen: boolean; data: DashboardData | null; loading: boolean; error: string; showAllPatients: boolean; }
+interface State { sidebarOpen: boolean; data: DashboardData | null; loading: boolean; error: string; showAllPatients: boolean; pendingBookings: any[]; loadingPending: boolean; }
 
 // ── Toggle ─────────────────────────────────────────────────────────
 const Toggle = ({ checked = false }: { checked?: boolean }) => (
@@ -82,7 +82,7 @@ interface ProviderDashboardProps {
 
 // ── Main ───────────────────────────────────────────────────────────
 class ProviderDashboard extends React.Component<ProviderDashboardProps, State> {
-  state: State = { sidebarOpen: false, data: null, loading: true, error: '', showAllPatients: false };
+  state: State = { sidebarOpen: false, data: null, loading: true, error: '', showAllPatients: false, pendingBookings: [], loadingPending: true, };
 
   async componentDidMount() {
     const token = localStorage.getItem('token');
@@ -93,7 +93,42 @@ class ProviderDashboard extends React.Component<ProviderDashboardProps, State> {
     } catch (err: any) {
       this.setState({ error: err.message || 'Failed to load dashboard', loading: false });
     }
+
+    this.loadPendingBookings();
   }
+
+  loadPendingBookings = async () => {
+    this.setState({ loadingPending: true });
+    try {
+      const pendingBookings = await api.getPendingBookings();
+      this.setState({ pendingBookings, loadingPending: false });
+    } catch {
+      this.setState({ pendingBookings: [], loadingPending: false });
+    }
+  };
+
+  handleConfirmBooking = async (bookingId: string) => {
+    try {
+      await api.confirmBookingByDoctor(bookingId);
+      this.setState(prev => ({
+        pendingBookings: prev.pendingBookings.filter(b => b.id !== bookingId),
+      }));
+    } catch (err: any) {
+      alert(err.message || 'Failed to confirm booking');
+    }
+  };
+
+  handleRejectBooking = async (bookingId: string) => {
+    if (!window.confirm('Reject this booking request?')) return;
+    try {
+      await api.rejectBookingByDoctor(bookingId);
+      this.setState(prev => ({
+        pendingBookings: prev.pendingBookings.filter(b => b.id !== bookingId),
+      }));
+    } catch (err: any) {
+      alert(err.message || 'Failed to reject booking');
+    }
+  };
 
   render() {
     const { sidebarOpen, data, loading, error, showAllPatients } = this.state;
@@ -192,6 +227,78 @@ class ProviderDashboard extends React.Component<ProviderDashboardProps, State> {
                 {stats.earningsChange >= 0 ? '+' : ''}{stats.earningsChange}% vs yesterday
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* ── Pending Bookings — awaiting doctor confirmation ──────── */}
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-5">
+            <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              Pending Confirmations
+              {this.state.pendingBookings.length > 0 && (
+                <span className="bg-orange-500 text-white text-sm font-bold px-2.5 py-1 rounded-full">
+                  {this.state.pendingBookings.length}
+                </span>
+              )}
+            </h3>
+          </div>
+
+          {this.state.loadingPending && (
+            <p className="text-gray-400 text-xl text-center py-8">Loading...</p>
+          )}
+
+          {!this.state.loadingPending && this.state.pendingBookings.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+              <p className="text-gray-400 text-xl">No pending booking requests</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {this.state.pendingBookings.map(booking => (
+              <div key={booking.id} className="bg-orange-50 rounded-2xl border-2 border-orange-200 p-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <img
+                    src={booking.patientAvatar}
+                    alt={booking.patientName}
+                    className="w-14 h-14 rounded-full object-cover flex-shrink-0"
+                  />
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-900 text-xl">{booking.patientName}</p>
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
+                      <span className="flex items-center gap-1 text-orange-600 text-lg font-medium">
+                        <IconWrapper icon={FaClock} />
+                        {new Date(booking.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at {booking.time}
+                      </span>
+                      <span className="text-gray-500 text-lg">
+                        {booking.sessionType === 'HOME_VISIT' ? '🏠 Home Visit' : '🏥 Clinic'}
+                      </span>
+                      {booking.bookedVia === 'AI_AGENT' && (
+                        <span className="bg-purple-100 text-purple-600 text-sm font-medium px-2 py-0.5 rounded-full">
+                          🤖 Booked via AI Chat
+                        </span>
+                      )}
+                    </div>
+                    {booking.notes && (
+                      <p className="text-gray-500 text-lg mt-1 italic">"{booking.notes}"</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => this.handleConfirmBooking(booking.id)}
+                    className="flex-1 bg-green-500 text-white py-3 rounded-xl text-lg font-semibold hover:bg-green-600 transition flex items-center justify-center gap-2"
+                  >
+                    <IconWrapper icon={FaCheck} /> Confirm
+                  </button>
+                  <button
+                    onClick={() => this.handleRejectBooking(booking.id)}
+                    className="flex-1 bg-white border-2 border-red-200 text-red-600 py-3 rounded-xl text-lg font-semibold hover:bg-red-50 transition"
+                  >
+                    ✕ Reject
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -511,9 +618,9 @@ class ProviderDashboard extends React.Component<ProviderDashboardProps, State> {
 }
 
 function ProviderDashboardWithRouter() {
-  const navigate = useNavigate();  
+  const navigate = useNavigate();
 
   // ✅ cast navigate to any to avoid type mismatch
-  return <ProviderDashboard navigate={navigate as any}/>;
+  return <ProviderDashboard navigate={navigate as any} />;
 }
 export default ProviderDashboardWithRouter;

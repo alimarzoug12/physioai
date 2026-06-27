@@ -754,5 +754,31 @@ export const api = {
     }>>(`/doctors/recommended${limit ? `?limit=${limit}` : ''}`),
 
 
+  getPendingBookings: () =>
+    apiFetch<Array<{
+      id: string;
+      patientName: string;
+      patientAvatar: string;
+      sessionType: string;
+      date: string;
+      time: string;
+      notes: string | null;
+      bookedVia: string;
+      createdAt: string;
+    }>>('/bookings/pending'),
+
+  confirmBookingByDoctor: (bookingId: string) =>
+    apiFetch<{ confirmed: boolean; bookingId: string; message: string }>(
+      `/bookings/${bookingId}/confirm`,
+      { method: 'PATCH' },
+    ),
+
+  rejectBookingByDoctor: (bookingId: string, reason?: string) =>
+    apiFetch<{ rejected: boolean; bookingId: string; message: string }>(
+      `/bookings/${bookingId}/reject`,
+      { method: 'PATCH', body: JSON.stringify({ reason }) },
+    ),
+
+
 
 };

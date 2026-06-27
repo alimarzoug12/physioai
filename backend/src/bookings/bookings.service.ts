@@ -133,8 +133,7 @@ export class BookingsService {
     // 4. Determine initial booking status
     //    - wallet/cash → CONFIRMED immediately
     //    - card/sadad  → PENDING (confirmed after payment)
-    const isPaidImmediately =
-      dto.paymentMethod === 'wallet' || dto.paymentMethod === 'cash';
+    const isPaidImmediately = false;
 
     // 5. Run everything in a transaction
     const result = await this.prisma.$transaction(async tx => {
@@ -232,14 +231,14 @@ export class BookingsService {
       });
 
       // Notify patient — only when payment is immediate (wallet/cash)
-      if (isPaidImmediately) {
-        this.notifications.notifyBookingConfirmed(
-          patientId,
-          result.id,
-          doctor?.user.fullName || 'your doctor',
-          dateStr,
-        ).catch(() => { });
-      }
+      // Notify patient that booking request was received (not confirmed yet)
+      this.notifications.send({
+        userId: patientId,
+        type: 'BOOKING_CONFIRMED',
+        title: '📋 Booking Request Sent',
+        message: `Your session request with Dr. ${doctor?.user.fullName || 'your doctor'} on ${dateStr} is awaiting confirmation.`,
+        data: { bookingId: result.id },
+      }).catch(() => { });
 
       // Notify doctor of new booking
       if (doctor?.userId) {
@@ -252,40 +251,42 @@ export class BookingsService {
       }
 
       // ✅ Send confirmation email (fire-and-forget)
-      if (isPaidImmediately && patient && doctor) {
-        this.mail.sendBookingConfirmation({
-          patientName: patient.fullName,
-          patientEmail: patient.email,
-          doctorName: doctor.user.fullName,
-          specialty: doctor.specialties[0] ?? 'Physiotherapy',
-          sessionDate: new Date(slot.date).toLocaleDateString('en-US', {
-            weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-          }),
-          sessionTime: slot.startTime,
-          sessionType: dto.sessionType === 'HOME_VISIT' ? 'Home Visit' : 'Clinic Visit',
-          centerName: (doctor as any).center?.name ?? '',
-          centerAddress: (doctor as any).center?.address ?? '',
-          duration: dto.durationMinutes,
-          totalAmount: dto.totalAmount,
-          currency: 'QAR',
-          bookingId: result.id,
-        }).catch(() => { });
-      }
+      // if (isPaidImmediately  && patient && doctor) {
+      //   this.mail.sendBookingConfirmation({
+      //     patientName: patient.fullName,
+      //     patientEmail: patient.email,
+      //     doctorName: doctor.user.fullName,
+      //     specialty: doctor.specialties[0] ?? 'Physiotherapy',
+      //     sessionDate: new Date(slot.date).toLocaleDateString('en-US', {
+      //       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+      //     }),
+      //     sessionTime: slot.startTime,
+      //     sessionType: dto.sessionType === 'HOME_VISIT' ? 'Home Visit' : 'Clinic Visit',
+      //     centerName: (doctor as any).center?.name ?? '',
+      //     centerAddress: (doctor as any).center?.address ?? '',
+      //     duration: dto.durationMinutes,
+      //     totalAmount: dto.totalAmount,
+      //     currency: 'QAR',
+      //     bookingId: result.id,
+      //   }).catch(() => { });
+      // }
 
     } catch {
       // Silent — notifications never block booking response
     }
+
+    const needsStripePayment = dto.paymentMethod === 'card' || dto.paymentMethod === 'sadad';
 
     return {
       bookingId: result.id,
       status: result.status,
       totalAmount: dto.totalAmount,
       paymentMethod: dto.paymentMethod,
-      // For card payments — frontend uses this to create a Stripe charge
-      requiresPayment: !isPaidImmediately,
-      message: isPaidImmediately
-        ? 'Booking confirmed successfully!'
-        : 'Booking created. Please complete payment to confirm.',
+      // Only card/sadad redirect to Stripe — wallet/cash go straight to "pending"
+      requiresPayment: needsStripePayment,
+      message: needsStripePayment
+        ? 'Booking created. Please complete payment to confirm.'
+        : 'Booking request sent! Waiting for doctor confirmation.',
     };
   }
 
@@ -673,5 +674,117 @@ export class BookingsService {
 
     this.logger.log(`✅ Booking ${bookingId} confirmed — email sent to ${booking.patient.email}`);
     return booking;
+  }
+
+  // Add these new methods to BookingsService, anywhere in the class:
+
+  async getPendingBookingsForDoctor(userId: string) {
+    this.logger.log(`🔍 Looking for doctor with userId: ${userId}`);
+    const doctor = await this.prisma.doctor.findUnique({ where: { userId } });
+    this.logger.log(`🔍 Doctor found: ${doctor?.id ?? 'NONE'}`);
+    if (!doctor) throw new BadRequestException('Doctor profile not found');
+
+    const bookings = await this.prisma.booking.findMany({
+      where: { doctorId: doctor.id, status: 'PENDING' },
+      include: { patient: true, slot: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    this.logger.log(`🔍 Found ${bookings.length} pending bookings for doctor ${doctor.id}`);
+
+    return bookings.map(b => ({
+      id: b.id,
+      patientName: b.patient.fullName,
+      patientAvatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(b.patient.fullName)}&background=3b82f6&color=fff`,
+      sessionType: b.sessionType,
+      date: b.slot.date,
+      time: b.slot.startTime,
+      notes: b.notes,
+      bookedVia: b.bookedVia,
+      createdAt: b.createdAt,
+    }));
+  }
+
+  async confirmBookingByDoctor(bookingId: string, userId: string) {
+    const doctor = await this.prisma.doctor.findUnique({ where: { userId } });
+    if (!doctor) throw new BadRequestException('Doctor profile not found');
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { patient: true, slot: true, doctor: { include: { user: true, center: true } } },
+    });
+
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.doctorId !== doctor.id) throw new BadRequestException('Not your booking');
+    if (booking.status !== 'PENDING') throw new BadRequestException('Booking is not pending');
+
+    await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: 'CONFIRMED', paidAt: new Date() },
+    });
+
+    const dateStr = new Date(booking.slot.date).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric',
+    });
+
+    this.notifications.notifyBookingConfirmed(
+      booking.patientId,
+      bookingId,
+      booking.doctor.user.fullName,
+      dateStr,
+    ).catch(() => { });
+
+    this.mail.sendBookingConfirmation({
+      patientName: booking.patient.fullName,
+      patientEmail: booking.patient.email,
+      doctorName: booking.doctor.user.fullName,
+      specialty: booking.doctor.specialties[0] ?? 'Physiotherapy',
+      sessionDate: new Date(booking.slot.date).toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric',
+      }),
+      sessionTime: booking.slot.startTime,
+      sessionType: booking.sessionType === 'HOME_VISIT' ? 'Home Visit' : 'Clinic Visit',
+      centerName: booking.doctor.center?.name ?? '',
+      centerAddress: booking.doctor.center?.address ?? '',
+      duration: 60,
+      totalAmount: booking.totalAmount ?? 0,
+      currency: 'QAR',
+      bookingId: booking.id,
+    }).catch(() => { });
+
+    this.logger.log(`Doctor ${userId} confirmed booking ${bookingId}`);
+
+    return { confirmed: true, bookingId, message: 'Booking confirmed' };
+  }
+
+  async rejectBookingByDoctor(bookingId: string, userId: string, reason?: string) {
+    const doctor = await this.prisma.doctor.findUnique({ where: { userId } });
+    if (!doctor) throw new BadRequestException('Doctor profile not found');
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { slot: true },
+    });
+
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.doctorId !== doctor.id) throw new BadRequestException('Not your booking');
+    if (booking.status !== 'PENDING') throw new BadRequestException('Booking is not pending');
+
+    await this.prisma.$transaction([
+      this.prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: 'CANCELLED', cancelReason: reason || 'Rejected by doctor' },
+      }),
+      this.prisma.slot.update({
+        where: { id: booking.slotId },
+        data: { isBooked: false },
+      }),
+    ]);
+
+    this.notifications.notifyBookingCancelled(booking.patientId, bookingId, 0).catch(() => { });
+
+    this.logger.log(`Doctor ${userId} rejected booking ${bookingId}`);
+
+    return { rejected: true, bookingId, message: 'Booking rejected' };
   }
 }

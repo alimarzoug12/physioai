@@ -58,6 +58,8 @@ async function main() {
     data: {
       email: 'dr.sarah@physioai.qa', passwordHash: doctorPwd,
       fullName: 'Sarah Al-Rashid', role: 'DOCTOR', phone: '+974 5551 0001',
+      emailVerified: true,
+      provider: 'email',
       doctor: { create: { centerId: center1.id, specialties: ['Musculoskeletal Specialist', 'Sports Injuries', 'Manual Therapy'], bio: 'Expert in lower back and joint recovery with 8 years experience.', rating: 4.9, pricePerSession: 180, languages: ['English', 'Arabic'], isAvailable: true } },
     },
     include: { doctor: true },
@@ -66,6 +68,8 @@ async function main() {
     data: {
       email: 'dr.ahmed@physioai.qa', passwordHash: doctorPwd,
       fullName: 'Ahmed Hassan', role: 'DOCTOR', phone: '+974 5551 0002',
+      emailVerified: true,
+      provider: 'email',
       doctor: { create: { centerId: center2.id, specialties: ['Orthopedic Physiotherapist', 'Spine Care', 'Acupuncture'], bio: 'Specialized in spine care and orthopedic rehabilitation with 12 years experience.', rating: 4.7, pricePerSession: 160, languages: ['Arabic', 'English', 'French'], isAvailable: true } },
     },
     include: { doctor: true },
@@ -74,6 +78,8 @@ async function main() {
     data: {
       email: 'dr.fatima@physioai.qa', passwordHash: doctorPwd,
       fullName: 'Fatima Al-Zahra', role: 'DOCTOR', phone: '+974 5551 0003',
+      emailVerified: true,
+      provider: 'email',
       doctor: { create: { centerId: center1.id, specialties: ['Sports Medicine', 'Rehabilitation', 'Pediatric Physio'], bio: 'Sports medicine specialist focusing on athletic performance and recovery with 6 years experience.', rating: 4.8, pricePerSession: 200, languages: ['English', 'Arabic', 'French'], isAvailable: true } },
     },
     include: { doctor: true },
@@ -82,6 +88,8 @@ async function main() {
     data: {
       email: 'dr.omar@physioai.qa', passwordHash: doctorPwd,
       fullName: 'Omar Khalil', role: 'DOCTOR', phone: '+974 5551 0004',
+      emailVerified: true,
+      provider: 'email',
       doctor: { create: { centerId: center3.id, specialties: ['Neurological Physiotherapy', 'Post-Surgery Rehab', 'Pain Management'], bio: 'Expert in neurological conditions and post-surgical rehabilitation with 15 years experience.', rating: 4.9, pricePerSession: 220, languages: ['Arabic', 'English'], isAvailable: true } },
     },
     include: { doctor: true },
@@ -90,6 +98,8 @@ async function main() {
     data: {
       email: 'dr.amina@physioai.qa', passwordHash: doctorPwd,
       fullName: 'Amina Hassan', role: 'DOCTOR', phone: '+974 5551 0005',
+      emailVerified: true,
+      provider: 'email',
       doctor: { create: { centerId: center2.id, specialties: ['Sports Rehabilitation', 'Injury Prevention', 'Pilates Therapy'], bio: 'Specialized in sports rehabilitation and injury prevention programs with 5 years experience.', rating: 4.6, pricePerSession: 150, languages: ['English', 'Arabic'], isAvailable: true } },
     },
     include: { doctor: true },
@@ -140,7 +150,7 @@ async function main() {
       role: 'ADMIN',
       phone: '+974 4000 0000',
       emailVerified: true,
-    provider: 'email',
+      provider: 'email',
     },
   });
   console.log('✅ Admin user created');

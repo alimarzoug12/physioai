@@ -138,7 +138,14 @@ const CreateAccountFooter: React.FC<Props> = ({
           });
 
           login(result.accessToken, result.user);
-          navigate('/dashboard');
+
+          if (result.user.role === 'DOCTOR') {
+            navigate('/provider-dashboard');
+          } else if (result.user.role === 'ADMIN') {
+            navigate('/admin-dashboard');
+          } else {
+            navigate('/dashboard');
+          }
 
         } catch (err: any) {
           // ── Handle EMAIL_NOT_VERIFIED from login ──────────────
