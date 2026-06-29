@@ -15,6 +15,8 @@ from rag import retrieve_context, ingest_knowledge_base
 from symptom_extractor import extract_symptoms
 from booking_agent import booking_graph, BookingState
 
+from memory import save_message, get_history, clear_memory, save_context, get_context
+
 load_dotenv()
 
 # ── Validate API key ──────────────────────────────────────────
@@ -91,6 +93,13 @@ async def chat(req: ChatRequest):
         retrieve_context(req.message),
         extract_symptoms(req.message)
     )
+
+    # ── Save to memory for booking flow continuity ────────────
+    user_id = req.userId or "anonymous"
+    if extracted.get("specialty") and user_id != "anonymous":
+        save_context(user_id, "last_specialty", extracted["specialty"])
+        save_context(user_id, "last_symptoms",  extracted.get("symptoms", []))
+    print(f"🔍 Symptoms: {extracted.get('symptoms')} | Body: {extracted.get('bodyPart')} | Specialty: {extracted.get('specialty')}")
 
     # Build profile text
     profile_text = ""

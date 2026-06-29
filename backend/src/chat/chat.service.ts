@@ -80,6 +80,7 @@ export class ChatService {
     return BOOKING_KEYWORDS.some(kw => lower.includes(kw));
   }
 
+
   private isConfirming(text: string): boolean {
     const lower = text.toLowerCase().trim();
     return CONFIRM_WORDS.some(w => lower.includes(w.toLowerCase()));
@@ -125,7 +126,7 @@ export class ChatService {
   }
 
   // ── MAIN ENTRY POINT ─────────────────────────────────────────
-  async sendMessage(userId: string, content: string) {
+  async sendMessage(userId: string, content: string, token: string = '') {
     const sessionId = await this.getOrCreateSession(userId);
 
     const session = await this.prisma.chatSession.findUnique({ where: { id: sessionId } });
@@ -196,6 +197,118 @@ export class ChatService {
       }
     }
 
+    // ── Cancel intent detection ───────────────────────────────
+    const CANCEL_KEYWORDS = [
+      'cancel', 'cancellation', 'annul', 'remove booking',
+      'delete session', 'delete booking', 'stop session',
+      'إلغاء', 'ألغِ', 'إلغاء الحجز', 'الغِ',
+      'annuler', 'supprimer la séance',
+    ];
+
+    const isCancelIntent = CANCEL_KEYWORDS.some(kw => lowerContent.includes(kw));
+
+    const isBookingIntent = !isCancelIntent && (
+      lowerContent.includes('book') ||
+      lowerContent.includes('reserve') ||
+      lowerContent.includes('appointment') ||
+      lowerContent.includes('schedule') ||
+      lowerContent.includes('session') ||
+      lowerContent.includes('specialist') ||
+      lowerContent.includes('available') ||
+      lowerContent.includes('doctor') ||
+      lowerContent.includes('حجز') ||
+      lowerContent.includes('احجز') ||
+      lowerContent.includes('موعد') ||
+      lowerContent.includes('متاح') ||
+      lowerContent.includes('طبيب') ||
+      lowerContent.includes('réserver') ||
+      lowerContent.includes('rendez-vous') ||
+      lowerContent.includes('séance') ||
+      lowerContent.includes('disponible') ||
+      lowerContent.includes('médecin')
+    );
+
+    // ── Cancel must be checked BEFORE booking (overrides "session" keyword) ──
+    if (isCancelIntent && state === 'IDLE') {
+      this.logger.log('🚫 Cancel intent detected');
+
+      const upcomingBookings = await this.prisma.booking.findMany({
+        where: {
+          patientId: userId,
+          status: { in: ['CONFIRMED', 'PENDING'] },
+        },
+        include: {
+          doctor: { include: { user: true } },
+          slot: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
+
+      if (upcomingBookings.length === 0) {
+        const msg = /[\u0600-\u06FF]/.test(content)
+          ? 'لا توجد لديك جلسات قادمة لإلغائها.'
+          : /\b(annuler|séance)\b/i.test(content)
+            ? "Vous n'avez pas de séances à venir à annuler."
+            : 'You have no upcoming sessions to cancel.';
+        return this.reply(sessionId, userMessage, msg);
+      }
+
+      // Try to match doctor name from the message
+      const mentionedDoctor = content.match(
+        /dr\.?\s+([a-zA-Z\u0600-\u06FF]+)/i
+      )?.[1]?.toLowerCase();
+
+      const timeMatch = content.match(/(\d{1,2})\s*(?::|h)?\s*(?:00)?\s*(AM|PM|am|pm)/i);
+      const mentionedHour = timeMatch
+        ? parseInt(timeMatch[1]) + (timeMatch[2].toLowerCase() === 'pm' && parseInt(timeMatch[1]) !== 12 ? 12 : 0)
+        : null;
+
+      let targetBooking = upcomingBookings[0];
+
+      // Match by doctor name first
+      if (mentionedDoctor) {
+        const found = upcomingBookings.find(b =>
+          b.doctor.user.fullName.toLowerCase().includes(mentionedDoctor)
+        );
+        if (found) targetBooking = found;
+      }
+
+      // Then refine by time if mentioned
+      if (mentionedHour !== null) {
+        const byTime = upcomingBookings.find(b => {
+          const slotHour = parseInt(b.slot.startTime.split(':')[0]);
+          return slotHour === mentionedHour &&
+            (!mentionedDoctor || b.doctor.user.fullName.toLowerCase().includes(mentionedDoctor));
+        });
+        if (byTime) targetBooking = byTime;
+      }
+
+      await this.prisma.booking.update({
+        where: { id: targetBooking.id },
+        data: { status: 'CANCELLED' },
+      });
+      await this.prisma.slot.update({
+        where: { id: targetBooking.slotId },
+        data: { isBooked: false },
+      });
+
+      this.logger.log(`✅ Cancelled booking ${targetBooking.id}`);
+
+      const dateStr = new Date(targetBooking.slot.date).toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric',
+      });
+      const isArabic = /[\u0600-\u06FF]/.test(content);
+      const isFrench = /\b(annuler|séance)\b/i.test(content);
+
+      const msg = isArabic
+        ? `✅ تم إلغاء جلستك مع د. ${targetBooking.doctor.user.fullName} بتاريخ ${dateStr} الساعة ${targetBooking.slot.startTime}. هل تريد حجز موعد جديد؟`
+        : isFrench
+          ? `✅ Votre séance avec Dr. ${targetBooking.doctor.user.fullName} le ${dateStr} à ${targetBooking.slot.startTime} a été annulée. Souhaitez-vous prendre un nouveau rendez-vous?`
+          : `✅ Your session with Dr. ${targetBooking.doctor.user.fullName} on ${dateStr} at ${targetBooking.slot.startTime} has been cancelled. Would you like to book a new appointment?`;
+
+      return this.reply(sessionId, userMessage, msg);
+    }
     // ════════════════════════════════════════════════════════
     // STATE: AWAITING_CONFIRMATION — patient must say yes/no
     // ════════════════════════════════════════════════════════

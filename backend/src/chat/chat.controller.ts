@@ -24,7 +24,7 @@ export class ChatController {
     if (!content.trim()) {
       return { assistantMessage: { content: 'Please type a message.' } };
     }
-    return this.chatService.sendMessage(req.user.userId, content.trim());
+    return this.chatService.sendMessage(req.user.userId, content.trim(), req.headers.authorization?.replace('Bearer ', '') ?? '',);
   }
 
   // DELETE /chat/session — clear history
