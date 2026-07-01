@@ -1,7 +1,7 @@
 import os
 
 from langchain_chroma import Chroma
-from langchain_ollama import OllamaEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from knowledge_base import PHYSIO_KNOWLEDGE
@@ -16,9 +16,7 @@ def get_vector_store():
     if _vector_store is not None:
         return _vector_store
 
-    embeddings = OllamaEmbeddings(
-        model="nomic-embed-text"
-    )
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=os.getenv("OPENAI_API_KEY"))
 
     _vector_store = Chroma(
         collection_name="physioai",
@@ -58,9 +56,7 @@ async def ingest_knowledge_base():
 
     try:
 
-        embeddings = OllamaEmbeddings(
-            model="nomic-embed-text"
-        )
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=os.getenv("OPENAI_API_KEY"))
 
         vector_store = Chroma(
             collection_name="physioai",
