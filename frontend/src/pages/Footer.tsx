@@ -36,7 +36,7 @@ class Footer extends React.Component {
 
           {/* Mention copyright */}
           <p className="mb-4 leading-relaxed">
-            © 2024 Physio AI. Licensed healthcare platform for Qatar & GCC
+            © 2026 Physio AI. Licensed healthcare platform for Qatar & GCC
           </p>
 
           {/* Icônes réseaux sociaux */}
