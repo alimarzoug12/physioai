@@ -96,6 +96,6 @@ export class BookingsController {
       body.latitude,
       body.longitude,
     );
-  }
+  } 
 
 }

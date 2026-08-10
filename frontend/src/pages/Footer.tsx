@@ -14,20 +14,20 @@ class Footer extends React.Component {
         <div className="max-w-5xl mx-auto text-center text-gray-400 text-sm">
           {/* Liens principaux */}
           <div className="flex flex-wrap justify-center gap-6 md:gap-10 mb-6">
-            <a 
-              href="/privacy-policy" 
+            <a
+              href="/privacy-policy"
               className="hover:text-blue-600 transition-colors duration-200"
             >
               Privacy Policy
             </a>
-            <a 
-              href="/terms-of-service" 
+            <a
+              href="/terms-of-service"
               className="hover:text-blue-600 transition-colors duration-200"
             >
               Terms of Service
             </a>
-            <a 
-              href="/support" 
+            <a
+              href="/support"
               className="hover:text-blue-600 transition-colors duration-200"
             >
               Support
@@ -42,10 +42,10 @@ class Footer extends React.Component {
           {/* Icônes réseaux sociaux */}
           <div className="flex justify-center gap-8 md:gap-10">
             {/* Twitter / X */}
-            <a 
-              href="https://x.com/physioai" 
-              target="_blank" 
-              rel="noopener noreferrer" 
+            <a
+              href="https://x.com/physioai"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-gray-400 hover:text-black transition-colors duration-200"
               aria-label="X (Twitter)"
             >
@@ -53,10 +53,10 @@ class Footer extends React.Component {
             </a>
 
             {/* Instagram */}
-            <a 
-              href="https://instagram.com/physioai" 
-              target="_blank" 
-              rel="noopener noreferrer" 
+            <a
+              href="https://instagram.com/physioai"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-gray-400 hover:text-pink-600 transition-colors duration-200"
               aria-label="Instagram"
             >
@@ -64,10 +64,10 @@ class Footer extends React.Component {
             </a>
 
             {/* LinkedIn */}
-            <a 
-              href="https://linkedin.com/company/physioai" 
-              target="_blank" 
-              rel="noopener noreferrer" 
+            <a
+              href="https://linkedin.com/company/physioai"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-gray-400 hover:text-blue-700 transition-colors duration-200"
               aria-label="LinkedIn"
             >

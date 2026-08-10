@@ -101,4 +101,5 @@ export class AuthController {
   ) {
     return this.authService.appleAuth(body.identityToken, body.fullName, res);
   }
+
 }
