@@ -15,12 +15,8 @@ export class BookingsController {
   create(@Req() req: any, @Body() dto: CreateBookingDto) {
     return this.bookingsService.createBooking(req.user.userId, dto);
   }
-  @Get(':id')
-  getOne(@Param('id') id: string, @Req() req: any) {
-    return this.bookingsService.getBookingById(id, req.user.userId);
-  }
 
-@Get('pending')
+  @Get('pending')
   getPending(@Req() req: any) {
     return this.bookingsService.getPendingBookingsForDoctor(req.user.userId);
   }
@@ -37,6 +33,12 @@ export class BookingsController {
       limit ? parseInt(limit, 10) : 10,
     );
   }
+
+  @Get(':id')
+  getOne(@Param('id') id: string, @Req() req: any) {
+    return this.bookingsService.getBookingById(id, req.user.userId);
+  }
+
   // GET /bookings/:id/policy — preview cancellation policy before cancelling
   @Get(':id/policy')
   getPolicy(@Param('id') id: string, @Req() req: any) {

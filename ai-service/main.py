@@ -56,6 +56,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    userId: Optional[str] = None
     history: List[ChatMessage] = []
     userProfile: Optional[dict] = None
     showDoctors: bool = False
@@ -80,6 +81,136 @@ async def health():
         "openai": bool(OPENAI_API_KEY),
     }
 
+
+def detect_first_intent(message: str, history: list) -> str:
+    """Detect if this is a symptom message or booking intent."""
+    msg_lower = message.lower()
+    exchange_count = len([m for m in history if m.get('role') == 'user'])
+
+    symptom_keywords = [
+        'pain', 'hurt', 'injury', 'ache', 'sore', 'douleur', 'mal', 'blessure',
+        'ألم', 'إصابة', 'وجع', 'knee', 'back', 'neck', 'shoulder', 'spine',
+        'experiencing', 'suffering', 'feel', 'problem', 'issue'
+    ]
+
+    has_symptom = any(k in msg_lower for k in symptom_keywords)
+
+    # First message with symptoms → always SYMPTOM step first
+    if exchange_count <= 1 and has_symptom:
+        return 'SYMPTOM_FIRST'
+
+    return 'NORMAL'
+
+# ── Chat ──────────────────────────────────────────────────────
+# @app.post("/chat", response_model=ChatResponse)
+# async def chat(req: ChatRequest):
+
+#     if not req.message.strip():
+#         raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+#     # Run RAG + symptom extraction in parallel
+#     rag_context, extracted = await asyncio.gather(
+#         retrieve_context(req.message),
+#         extract_symptoms(req.message)
+#     )
+
+#     # ── Save to memory for booking flow continuity ────────────
+#     user_id = req.userId or "anonymous"
+#     if extracted.get("specialty") and user_id != "anonymous":
+#         save_context(user_id, "last_specialty", extracted["specialty"])
+#         save_context(user_id, "last_symptoms",  extracted.get("symptoms", []))
+#     print(f"🔍 Symptoms: {extracted.get('symptoms')} | Body: {extracted.get('bodyPart')} | Specialty: {extracted.get('specialty')}")
+
+#     # Build profile text
+#     profile_text = ""
+#     if req.userProfile:
+#         conditions = [
+#             k for k, v in req.userProfile.items()
+#             if v is True and k in ["backPain", "jointPain", "sportsInjury", "neckIssues"]
+#         ]
+#         profile_text = f"""
+# PATIENT PROFILE:
+# - Age: {req.userProfile.get("age", "unknown")}
+# - Gender: {req.userProfile.get("gender", "unknown")}
+# - Activity Level: {req.userProfile.get("activityLevel", "unknown")}
+# - Conditions: {", ".join(conditions) or "none reported"}
+# """
+
+#     # Build RAG context
+#     rag_text = ""
+#     if rag_context:
+#         rag_text = f"\nRELEVANT PHYSIOTHERAPY KNOWLEDGE:\n{rag_context}\n"
+
+#     if req.showDoctors:
+#         booking_instruction = """
+#     - Specialists are being shown to the patient right now below this message.
+#     - NEVER ask "which day works for you?" — the day is already determined.
+#     - Just say something like: "Here are the available specialists for you. Please choose one to continue your booking."
+#     - Maximum 2 sentences."""
+#     else:
+#         booking_instruction = """
+#     - CONVERSATION FLOW — FOLLOW THIS EXACT ORDER:
+
+#     STEP 1 — When patient describes pain or injury (FIRST MESSAGE):
+#     → Express empathy: "I'm sorry to hear that..." or "That sounds painful..."
+#     → Give 1-2 brief medical tips related to their condition
+#     → Ask: "Would you like me to find a physiotherapist who specializes in this?"
+#     → DO NOT mention days, dates, or booking yet — NEVER in step 1
+
+#     STEP 2 — Only when patient says YES to booking:
+#     → Say: "I can show you available specialists. Which day works for you?"
+
+#     STEP 3 — Only after patient gives a day:
+#     → Show available doctors for that day
+
+#     STEP 4 — Only after patient picks a doctor:
+#     → Confirm: "📋 Confirm your booking: Doctor: X, Date: Y, Time: Z. Do you confirm? (yes / no)"
+
+#     RULES:
+#     - NEVER skip steps — always go in order 1 → 2 → 3 → 4
+#     - NEVER ask for a day in Step 1
+#     - If first message contains pain/injury keywords → ALWAYS go to Step 1 first
+#     - Do NOT mention doctors unless patient explicitly asks to book"""
+
+#     # ── Build LangChain messages ──────────────────────────────
+#     messages = [SystemMessage(content=system_content)]
+
+#     # Add conversation history (last 8 messages)
+#     for msg in req.history[-8:]:
+#         role = msg.role.lower()
+#         if role in ("user", "human"):
+#             messages.append(HumanMessage(content=msg.content))
+#         else:
+#             messages.append(AIMessage(content=msg.content))
+
+#     # Add current message
+#     messages.append(HumanMessage(content=req.message))
+
+#     # ── Call OpenAI via LangChain ─────────────────────────────
+#     try:
+#         print(f"📨 Sending to OpenAI: {req.message[:60]}...")
+#         print(f"📚 RAG context used: {bool(rag_context)}")
+#         print(f"🔍 Extracted: {extracted}")
+
+#         response = await llm.ainvoke(messages)
+#         reply = response.content.strip()
+
+#         print(f"✅ OpenAI reply: {reply[:120]}...")
+
+#     except Exception as e:
+#         import traceback
+#         print("❌ OpenAI error:")
+#         traceback.print_exc()
+#         raise HTTPException(status_code=500, detail=f"OpenAI error: {str(e)}")
+
+#     suggest_doctors = bool(extracted.get("specialty"))
+
+#     return ChatResponse(
+#         reply=reply,
+#         usedRAG=bool(rag_context),
+#         extractedData=extracted,
+#         suggestDoctors=suggest_doctors,
+#     )
 
 # ── Chat ──────────────────────────────────────────────────────
 @app.post("/chat", response_model=ChatResponse)
@@ -129,10 +260,30 @@ PATIENT PROFILE:
 - Maximum 2 sentences."""
     else:
         booking_instruction = """
-- When patient says "I want to book" or similar → say "I can show you available specialists. Which day works for you?"
-- Do NOT mention doctors unless patient explicitly asks to book."""
+- CONVERSATION FLOW — FOLLOW THIS EXACT ORDER:
 
-    # ── System prompt ─────────────────────────────────────────
+STEP 1 — When patient describes pain or injury (FIRST MESSAGE):
+→ Express empathy: "I'm sorry to hear that..." or "That sounds painful..."
+→ Give 1-2 brief medical tips related to their condition
+→ Ask: "Would you like me to find a physiotherapist who specializes in this?"
+→ DO NOT mention days, dates, or booking yet — NEVER in step 1
+
+STEP 2 — Only when patient says YES to booking:
+→ Say: "I can show you available specialists. Which day works for you?"
+
+STEP 3 — Only after patient gives a day:
+→ Show available doctors for that day
+
+STEP 4 — Only after patient picks a doctor:
+→ Confirm: "📋 Confirm your booking: Doctor: X, Date: Y, Time: Z. Do you confirm? (yes / no)"
+
+RULES:
+- NEVER skip steps — always go in order 1 → 2 → 3 → 4
+- NEVER ask for a day in Step 1
+- If first message contains pain/injury keywords → ALWAYS go to Step 1 first
+- Do NOT mention doctors unless patient explicitly asks to book"""
+
+    # ── ✅ AJOUTER CES LIGNES ICI ──────────────────────────────
     system_content = f"""You are PhysioAI, an expert physiotherapy assistant for a medical platform in Qatar.
 {rag_text}
 {profile_text}
@@ -144,10 +295,11 @@ LANGUAGE RULES — CRITICAL:
 - NEVER mix languages
 
 BEHAVIOR RULES:
-- When patient describes pain or symptoms → give medical advice ONLY (1-2 tips)
+- When patient describes pain or symptoms → give medical advice (1-2 tips) and ask if they want to book
 {booking_instruction}
 - Maximum 3 sentences
 - Be empathetic and concise"""
+    # ── FIN DES LIGNES AJOUTÉES ────────────────────────────────
 
     # ── Build LangChain messages ──────────────────────────────
     messages = [SystemMessage(content=system_content)]
@@ -188,7 +340,6 @@ BEHAVIOR RULES:
         extractedData=extracted,
         suggestDoctors=suggest_doctors,
     )
-
 
 # ── Ingest knowledge base ─────────────────────────────────────
 @app.post("/ingest")

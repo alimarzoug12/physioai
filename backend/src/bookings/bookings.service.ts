@@ -7,6 +7,8 @@ import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { HomeVisitService } from './dto/home-visit.service';
 import { MailService } from '../mail/mail.service';
+import { NotificationsGateway } from 'src/notifications/notifications.gateway';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 
 function getCancellationPolicy(slotDate: Date, slotTime: string): {
@@ -36,258 +38,134 @@ function getCancellationPolicy(slotDate: Date, slotTime: string): {
 @Injectable()
 export class BookingsService {
   private readonly logger = new Logger(BookingsService.name);
-  constructor(private prisma: PrismaService, private notifications: NotificationsService, private homeVisitSvc: HomeVisitService, private mail: MailService,) { }
+  constructor(private prisma: PrismaService, private notifications: NotificationsService, private homeVisitSvc: HomeVisitService, private mail: MailService, private notificationsGateway: NotificationsGateway,) { }
+
+  // async createBooking(patientId: string, dto: CreateBookingDto) {
+  //   const booking = await this.prisma.booking.create({
+  //     data: {
+  //       patientId,
+  //       doctorId: dto.doctorId,
+  //       slotId: dto.slotId,
+  //       status: 'PENDING',
+  //       sessionType: dto.sessionType ?? 'CLINIC',
+  //       notes: dto.notes,
+  //     },
+  //     include: {
+  //       patient: true,
+  //       doctor: { include: { user: true } },
+  //       slot: true,
+  //     },
+  //   });
+
+  //   await this.prisma.slot.update({
+  //     where: { id: dto.slotId },
+  //     data: { isBooked: true },
+  //   });
+
+  //   // ── Notify doctor about new pending booking ──────────────
+  //   const doctorUserId = booking.doctor.user.id;
+  //   const patientName = booking.patient.fullName;
+  //   const slotDate = new Date(booking.slot.date).toLocaleDateString('en-US', {
+  //     weekday: 'long', month: 'long', day: 'numeric',
+  //   });
+
+  //   // 1. Save notification in database
+  //   await this.prisma.notification.create({
+  //     data: {
+  //       userId: doctorUserId,
+  //       title: 'New Booking Request',
+  //       message: `${patientName} has requested a session on ${slotDate} at ${booking.slot.startTime}. Please confirm or decline.`,
+  //       type: 'BOOKING_REQUEST',
+  //       data: JSON.stringify({ bookingId: booking.id }),
+  //     },
+  //   });
+
+  //   // 2. Send real-time WebSocket notification to doctor
+  //   this.notifications.send({
+  //     userId: doctorUserId,
+  //     type: 'NEW_BOOKING',
+  //     title: 'New Booking Request',
+  //     message: `${patientName} requested ${slotDate} at ${booking.slot.startTime}`,
+  //     data: { bookingId: booking.id },
+  //   });
+
+  //   // 3. Send email to doctor
+  //   await this.mail.sendBookingRequestToDoctor({
+  //     to: booking.doctor.user.email,
+  //     doctorName: booking.doctor.user.fullName,
+  //     patientName,
+  //     date: slotDate,
+  //     time: booking.slot.startTime,
+  //     sessionType: booking.sessionType,
+  //     bookingId: booking.id,
+  //   });
+
+  //   return booking;
+  // }
 
   async createBooking(patientId: string, dto: CreateBookingDto) {
-    // Verify slot is still available
-    const slot = await this.prisma.slot.findUnique({ where: { id: dto.slotId } });
-    if (!slot) throw new NotFoundException('Slot not found');
-    const activeBooking = await this.prisma.booking.findFirst({
-      where: {
+    const booking = await this.prisma.booking.create({
+      data: {
+        patientId,
+        doctorId: dto.doctorId,
         slotId: dto.slotId,
-        status: { in: ['PENDING', 'CONFIRMED'] }, // ✅ only block if active
+        status: 'PENDING',
+        sessionType: dto.sessionType ?? 'CLINIC',
+        notes: dto.notes,
+      },
+      include: {
+        patient: true,
+        doctor: { include: { user: true } },
+        slot: true,
       },
     });
-    if (activeBooking) {
-      throw new BadRequestException('This slot is already booked');
-    }
 
-    // ✅ Also check slot.isBooked as a safety net
-    if (slot.isBooked) {
-      // Verify it's not just a stale flag from a cancelled booking
-      const staleCancelledBooking = await this.prisma.booking.findFirst({
-        where: {
-          slotId: dto.slotId,
-          status: { in: ['CANCELLED', 'COMPLETED'] },
-        },
-      });
-      if (!staleCancelledBooking) {
-        throw new BadRequestException('This slot is already booked');
-      }
-      // It's just a stale flag — reset it and continue
-      await this.prisma.slot.update({
-        where: { id: dto.slotId },
-        data: { isBooked: false },
-      });
-    }
-
-    // ── Home visit validation ─────────────────────────────────────
-    let travelFee = 0;
-    let distanceKm = 0;
-
-    if (dto.sessionType === 'HOME_VISIT') {
-      if (!dto.homeAddress) {
-        throw new BadRequestException(
-          'Home address is required for home visit sessions',
-        );
-      }
-
-      // Calculate travel fee if coordinates provided
-      if (dto.latitude && dto.longitude) {
-        const doctor = await this.prisma.doctor.findUnique({
-          where: { id: dto.doctorId },
-          include: { center: true },
-        });
-
-        if (doctor?.center?.latitude && doctor?.center?.longitude) {
-          const result = this.homeVisitSvc.estimateFee(
-            dto.latitude, dto.longitude,
-            doctor.center.latitude, doctor.center.longitude,
-          );
-          travelFee = result.travelFee;
-          distanceKm = result.distanceKm;
-
-          this.logger.log(
-            `Home visit: ${result.breakdown} for patient ${patientId}`,
-          );
-        } else {
-          // No center coordinates — use flat fee
-          travelFee = 80;
-        }
-      } else {
-        // No patient coordinates — use flat fee
-        travelFee = 80;
-      }
-    }
-
-    if (dto.paymentMethod === 'wallet') {
-      const wallet = await this.prisma.wallet.findUnique({
-        where: { userId: patientId },
-      });
-      if (!wallet) {
-        throw new BadRequestException('Wallet not found. Please contact support.');
-      }
-      if (wallet.balance < dto.totalAmount) {
-        throw new BadRequestException(
-          `Insufficient wallet balance. You have ${wallet.balance} ${wallet.currency} but need ${dto.totalAmount} ${wallet.currency}.`,
-        );
-      }
-    }
-    // 3. Build notes string (includes requirements)
-    const notesArr = [
-      dto.notes,
-      ...(dto.requirements ?? []),
-    ].filter(Boolean);
-    const combinedNotes = notesArr.join('\n') || undefined;
-
-    // 4. Determine initial booking status
-    //    - wallet/cash → CONFIRMED immediately
-    //    - card/sadad  → PENDING (confirmed after payment)
-    const isPaidImmediately = false;
-
-    // 5. Run everything in a transaction
-    const result = await this.prisma.$transaction(async tx => {
-      // Create the booking
-      const booking = await tx.booking.create({
-        data: {
-          patientId,
-          doctorId: dto.doctorId,
-          slotId: dto.slotId,
-          sessionType: dto.sessionType,
-          notes: combinedNotes,
-          bookedVia: 'APP',
-          status: isPaidImmediately ? 'CONFIRMED' : 'PENDING',
-          totalAmount: dto.totalAmount,
-          homeAddress: dto.homeAddress || null,
-          latitude: dto.latitude || null,
-          longitude: dto.longitude || null,
-          travelFee: travelFee > 0 ? travelFee : null,
-          ...(isPaidImmediately ? { paidAt: new Date() } : {}),
-        },
-      });
-
-      // Lock the slot
-      await tx.slot.update({
-        where: { id: dto.slotId },
-        data: { isBooked: true },
-      });
-
-      // If wallet payment — deduct balance and create transaction record
-      if (dto.paymentMethod === 'wallet') {
-        const wallet = await tx.wallet.findUnique({
-          where: { userId: patientId },
-        });
-
-        if (!wallet) throw new BadRequestException('Wallet not found');
-
-        // Deduct balance
-        await tx.wallet.update({
-          where: { id: wallet.id },
-          data: { balance: { decrement: dto.totalAmount } },
-        });
-
-        // Create debit transaction record (shows in wallet history)
-        await tx.transaction.create({
-          data: {
-            walletId: wallet.id,
-            type: 'DEBIT',
-            category: dto.sessionType === 'HOME_VISIT' ? 'HOME_VISIT' : 'SESSION',
-            title: 'Session Payment',
-            subtitle: `Booking confirmed — ${dto.totalAmount} QAR`,
-            amount: -dto.totalAmount,  // negative = debit
-            status: 'COMPLETED',
-          },
-        });
-
-        // Add reward points (1 point per QAR spent)
-        const points = Math.floor(dto.totalAmount);
-        await tx.reward.updateMany({
-          where: { wallet: { userId: patientId } },
-          data: { points: { increment: points } },
-        });
-
-        this.logger.log(
-          `Wallet payment: deducted ${dto.totalAmount} QAR from user ${patientId}. Points added: ${points}`,
-        );
-      }
-
-      // Apply promo code usage increment if provided
-      if (dto.promoCode) {
-        await tx.promoCode.updateMany({
-          where: { code: dto.promoCode },
-          data: { usageCount: { increment: 1 } },
-        }).catch(() => { }); // silent — promo may not exist
-      }
-
-
-
-      return booking;
+    await this.prisma.slot.update({
+      where: { id: dto.slotId },
+      data: { isBooked: true },
     });
 
-    this.logger.log(
-      `Booking created: ${result.id} | patient: ${patientId} | method: ${dto.paymentMethod} | amount: ${dto.totalAmount}`,
-    );
-    try {
-      const [doctor, patient] = await Promise.all([
-        this.prisma.doctor.findUnique({
-          where: { id: dto.doctorId },
-          include: { user: true, center: true },  // ✅ add center for email
-        }),
-        this.prisma.user.findUnique({ where: { id: patientId } }),
-      ]);
+    // ── Notify doctor about new pending booking ──────────────
+    const doctorUserId = booking.doctor.user.id;
+    const patientName = booking.patient.fullName;
+    const slotDate = new Date(booking.slot.date).toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric',
+    });
 
-      const dateStr = new Date(slot.date).toLocaleDateString('en-US', {
-        month: 'short', day: 'numeric',
-      });
+    // 1. Save notification in database
+    await this.prisma.notification.create({
+      data: {
+        userId: doctorUserId,
+        title: 'New Booking Request',
+        message: `${patientName} has requested a session on ${slotDate} at ${booking.slot.startTime}. Please confirm or decline.`,
+        type: 'BOOKING_REQUEST',
+        data: JSON.stringify({ bookingId: booking.id }),
+      },
+    });
 
-      // Notify patient — only when payment is immediate (wallet/cash)
-      // Notify patient that booking request was received (not confirmed yet)
-      this.notifications.send({
-        userId: patientId,
-        type: 'BOOKING_CONFIRMED',
-        title: '📋 Booking Request Sent',
-        message: `Your session request with Dr. ${doctor?.user.fullName || 'your doctor'} on ${dateStr} is awaiting confirmation.`,
-        data: { bookingId: result.id },
-      }).catch(() => { });
+    // 2. Send real-time WebSocket notification to doctor
+    this.notifications.send({
+      userId: doctorUserId,
+      type: 'NEW_BOOKING',
+      title: 'New Booking Request',
+      message: `${patientName} requested ${slotDate} at ${booking.slot.startTime}`,
+      data: { bookingId: booking.id },
+    });
 
-      // Notify doctor of new booking
-      if (doctor?.userId) {
-        this.notifications.notifyDoctorNewBooking(
-          doctor.userId,
-          result.id,
-          patient?.fullName || 'A patient',
-          dateStr,
-        ).catch(() => { });
-      }
+    // 3. ✅ Fire-and-forget — never blocks the booking
+    this.mail.sendBookingRequestToDoctor({
+      to: booking.doctor.user.email,
+      doctorName: booking.doctor.user.fullName,
+      patientName,
+      date: slotDate,
+      time: booking.slot.startTime,
+      sessionType: booking.sessionType,
+      bookingId: booking.id,
+    }).catch((err) => {
+      this.logger.warn(`Doctor email failed silently: ${err.message}`);
+    });
 
-      // ✅ Send confirmation email (fire-and-forget)
-      // if (isPaidImmediately  && patient && doctor) {
-      //   this.mail.sendBookingConfirmation({
-      //     patientName: patient.fullName,
-      //     patientEmail: patient.email,
-      //     doctorName: doctor.user.fullName,
-      //     specialty: doctor.specialties[0] ?? 'Physiotherapy',
-      //     sessionDate: new Date(slot.date).toLocaleDateString('en-US', {
-      //       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-      //     }),
-      //     sessionTime: slot.startTime,
-      //     sessionType: dto.sessionType === 'HOME_VISIT' ? 'Home Visit' : 'Clinic Visit',
-      //     centerName: (doctor as any).center?.name ?? '',
-      //     centerAddress: (doctor as any).center?.address ?? '',
-      //     duration: dto.durationMinutes,
-      //     totalAmount: dto.totalAmount,
-      //     currency: 'QAR',
-      //     bookingId: result.id,
-      //   }).catch(() => { });
-      // }
-
-    } catch {
-      // Silent — notifications never block booking response
-    }
-
-    const needsStripePayment = dto.paymentMethod === 'card' || dto.paymentMethod === 'sadad';
-
-    return {
-      bookingId: result.id,
-      status: result.status,
-      totalAmount: dto.totalAmount,
-      paymentMethod: dto.paymentMethod,
-      // Only card/sadad redirect to Stripe — wallet/cash go straight to "pending"
-      requiresPayment: needsStripePayment,
-      message: needsStripePayment
-        ? 'Booking created. Please complete payment to confirm.'
-        : 'Booking request sent! Waiting for doctor confirmation.',
-    };
+    return booking;
   }
 
   async cancelBooking(bookingId: string, patientId: string, dto: CancelBookingDto) {
@@ -654,7 +532,7 @@ export class BookingsService {
     });
 
     // ✅ Match exact BookingConfirmationData interface
-    await this.mail.sendBookingConfirmation({
+    this.mail.sendBookingConfirmation({
       patientName: booking.patient.fullName,
       patientEmail: booking.patient.email,          // ✅ patientEmail not to
       doctorName: booking.doctor.user.fullName,
@@ -670,7 +548,7 @@ export class BookingsService {
       totalAmount: booking.totalAmount ?? 0,
       currency: 'QAR',
       bookingId: booking.id,
-    });
+    }).catch(() => { });
 
     this.logger.log(`✅ Booking ${bookingId} confirmed — email sent to ${booking.patient.email}`);
     return booking;
@@ -786,5 +664,28 @@ export class BookingsService {
     this.logger.log(`Doctor ${userId} rejected booking ${bookingId}`);
 
     return { rejected: true, bookingId, message: 'Booking rejected' };
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async autoCompleteBookings() {
+    const now = new Date();
+
+    const expiredBookings = await this.prisma.booking.findMany({
+      where: {
+        status: 'CONFIRMED',
+        slot: {
+          date: { lt: now },
+        },
+      },
+      include: { slot: true },
+    });
+
+    for (const booking of expiredBookings) {
+      await this.prisma.booking.update({
+        where: { id: booking.id },
+        data: { status: 'COMPLETED' },
+      });
+      this.logger.log(`✅ Auto-completed booking ${booking.id}`);
+    }
   }
 }

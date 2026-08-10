@@ -15,6 +15,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import { api } from '../services/api';
+import { useNotifications } from '../hooks/useNotifications';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => (
   <Icon className={className} />
@@ -38,7 +39,46 @@ interface DashboardData {
   recentMessages: { id: string; patientName: string; patientAvatar: string; message: string; time: string; tag: string }[];
 }
 
-interface State { sidebarOpen: boolean; data: DashboardData | null; loading: boolean; error: string; showAllPatients: boolean; pendingBookings: any[]; loadingPending: boolean; }
+interface State { sidebarOpen: boolean; data: DashboardData | null; loading: boolean; error: string; showAllPatients: boolean; pendingBookings: any[]; loadingPending: boolean; rejectModal: { open: boolean; bookingId: string | null }; rejectReason: string; }
+
+// ── WebSocket Connection Wrapper ──────────────────────────────────
+// const WebSocketConnector = ({ children }: { children: (connected: boolean) => React.ReactNode }) => {
+//   const { connect, connected } = useNotifications();
+
+//   React.useEffect(() => {
+//     const token = localStorage.getItem('token');
+//     console.log('🔔🔔🔔 WebSocketConnector: token exists?', !!token);
+//     if (token) {
+//       connect();
+//       console.log('🔔🔔🔔 WebSocketConnector: connect() called');
+//     }
+//   }, [connect]);
+
+//   React.useEffect(() => {
+//     console.log('🔔🔔🔔 WebSocketConnector: connected?', connected);
+//   }, [connected]);
+
+//   return <>{children(connected)}</>;
+// };
+
+const WebSocketConnector = ({ children }: { children: (connected: boolean) => React.ReactNode }) => {
+  const { connect, connected } = useNotifications();
+
+  React.useEffect(() => {
+    const token = localStorage.getItem('token');
+    console.log('🔔 WebSocketConnector: token exists?', !!token);
+    if (token) {
+      connect();
+      console.log('🔔 WebSocketConnector: connect() called');
+    }
+  }, [connect]);
+
+  React.useEffect(() => {
+    console.log('🔔 WebSocketConnector: connected?', connected);
+  }, [connected]);
+
+  return <>{children(connected)}</>;
+};
 
 // ── Toggle ─────────────────────────────────────────────────────────
 const Toggle = ({ checked = false }: { checked?: boolean }) => (
@@ -78,11 +118,12 @@ function statusStyle(status: string) {
 
 interface ProviderDashboardProps {
   navigate?: (path: string | number | any) => void;
+  wsConnected?: boolean;
 }
 
 // ── Main ───────────────────────────────────────────────────────────
 class ProviderDashboard extends React.Component<ProviderDashboardProps, State> {
-  state: State = { sidebarOpen: false, data: null, loading: true, error: '', showAllPatients: false, pendingBookings: [], loadingPending: true, };
+  state: State = { sidebarOpen: false, data: null, loading: true, error: '', showAllPatients: false, pendingBookings: [], loadingPending: true, rejectModal: { open: false, bookingId: null }, rejectReason: '', };
 
   async componentDidMount() {
     const token = localStorage.getItem('token');
@@ -118,12 +159,23 @@ class ProviderDashboard extends React.Component<ProviderDashboardProps, State> {
     }
   };
 
-  handleRejectBooking = async (bookingId: string) => {
-    if (!window.confirm('Reject this booking request?')) return;
+  openRejectModal = (bookingId: string) => {
+    this.setState({ rejectModal: { open: true, bookingId }, rejectReason: '' });
+  };
+
+  closeRejectModal = () => {
+    this.setState({ rejectModal: { open: false, bookingId: null }, rejectReason: '' });
+  };
+
+  confirmReject = async () => {
+    const { bookingId } = this.state.rejectModal;
+    if (!bookingId) return;
     try {
-      await api.rejectBookingByDoctor(bookingId);
+      await api.rejectBookingByDoctor(bookingId, this.state.rejectReason);
       this.setState(prev => ({
         pendingBookings: prev.pendingBookings.filter(b => b.id !== bookingId),
+        rejectModal: { open: false, bookingId: null },
+        rejectReason: '',
       }));
     } catch (err: any) {
       alert(err.message || 'Failed to reject booking');
@@ -291,7 +343,7 @@ class ProviderDashboard extends React.Component<ProviderDashboardProps, State> {
                     <IconWrapper icon={FaCheck} /> Confirm
                   </button>
                   <button
-                    onClick={() => this.handleRejectBooking(booking.id)}
+                    onClick={() => this.openRejectModal(booking.id)}
                     className="flex-1 bg-white border-2 border-red-200 text-red-600 py-3 rounded-xl text-lg font-semibold hover:bg-red-50 transition"
                   >
                     ✕ Reject
@@ -612,6 +664,61 @@ class ProviderDashboard extends React.Component<ProviderDashboardProps, State> {
           </div>
         </div>
 
+        {/* ── Reject Modal ─────────────────────────────────────── */}
+        {this.state.rejectModal.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={this.closeRejectModal}
+            />
+
+            {/* Modal */}
+            <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 z-10">
+
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-red-500 text-xl">✕</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Reject Booking</h3>
+                  <p className="text-sm text-gray-500">This action cannot be undone</p>
+                </div>
+              </div>
+
+              {/* Reason input */}
+              <div className="mb-5">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason (optional)
+                </label>
+                <textarea
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-red-200"
+                  rows={3}
+                  placeholder="e.g. Schedule conflict, unavailable on this date..."
+                  value={this.state.rejectReason}
+                  onChange={e => this.setState({ rejectReason: e.target.value })}
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={this.closeRejectModal}
+                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold text-sm hover:bg-gray-200 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={this.confirmReject}
+                  className="flex-1 bg-red-500 text-white py-3 rounded-xl font-semibold text-sm hover:bg-red-600 transition"
+                >
+                  Confirm Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -620,7 +727,15 @@ class ProviderDashboard extends React.Component<ProviderDashboardProps, State> {
 function ProviderDashboardWithRouter() {
   const navigate = useNavigate();
 
-  // ✅ cast navigate to any to avoid type mismatch
-  return <ProviderDashboard navigate={navigate as any} />;
+  return (
+    <WebSocketConnector>
+      {(connected) => (
+        <ProviderDashboard
+          navigate={navigate as any}
+          wsConnected={connected}
+        />
+      )}
+    </WebSocketConnector>
+  );
 }
 export default ProviderDashboardWithRouter;

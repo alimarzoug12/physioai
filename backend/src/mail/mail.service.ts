@@ -77,6 +77,9 @@ export class MailService {
   private readonly frontendUrl: string;
 
   constructor(private config: ConfigService) {
+    console.log('📧 MAIL_HOST:', this.config.get<string>('MAIL_HOST'));
+  console.log('📧 MAIL_USER:', this.config.get<string>('MAIL_USER'));
+  console.log('📧 MAIL_PASS:', this.config.get<string>('MAIL_PASS') ? '✅ Défini' : '❌ Manquant');
     this.from = this.config.get<string>('mail.from') || 'PhysioAI <noreply@physioai.com>';
     this.frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
 
@@ -812,5 +815,38 @@ export class MailService {
       '🔐 Reset your PhysioAI password',
       html,
     );
+  }
+  async sendBookingRequestToDoctor(data: {
+    to: string;
+    doctorName: string;
+    patientName: string;
+    date: string;
+    time: string;
+    sessionType: string;
+    bookingId: string;
+  }) {
+    await this.transporter.sendMail({
+      from: this.from,
+      to: data.to,
+      subject: `New Session Request — ${data.patientName}`,
+      html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:auto">
+        <h2 style="color:#2563eb">New Booking Request</h2>
+        <p>Hello Dr. ${data.doctorName},</p>
+        <p><strong>${data.patientName}</strong> has requested a session with you.</p>
+        <table style="width:100%;border-collapse:collapse;margin:16px 0">
+          <tr><td style="padding:8px;background:#f3f4f6"><strong>Date</strong></td><td style="padding:8px">${data.date}</td></tr>
+          <tr><td style="padding:8px;background:#f3f4f6"><strong>Time</strong></td><td style="padding:8px">${data.time}</td></tr>
+          <tr><td style="padding:8px;background:#f3f4f6"><strong>Type</strong></td><td style="padding:8px">${data.sessionType}</td></tr>
+        </table>
+        <p>Please log in to your dashboard to confirm or decline this request.</p>
+        <a href="${process.env.FRONTEND_URL}/provider-dashboard" 
+           style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">
+          View Request
+        </a>
+        <p style="color:#9ca3af;font-size:12px;margin-top:24px">PhysioAI — Qatar</p>
+      </div>
+    `,
+    });
   }
 }

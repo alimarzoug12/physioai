@@ -30,40 +30,48 @@ export class NotificationsService {
   // ─────────────────────────────────────────────────────────────────
 
   async send(dto: {
-    userId: string;
-    type: NotificationType;
-    title: string;
-    message: string;
-    data?: Record<string, any>;
-  }) {
-    // 1. Save to DB so it persists across sessions
-    const notification = await this.prisma.notification.create({
-      data: {
-        userId: dto.userId,
-        type: dto.type,
-        title: dto.title,
-        message: dto.message,
-        data: dto.data ? JSON.stringify(dto.data) : null,
-        isRead: false,
-      },
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  data?: Record<string, any>;
+}) {
+  // ✅ AJOUTER CES LOGS
+  console.log(`📨📨📨 SEND: userId=${dto.userId}, type=${dto.type}`);
+  console.log(`📨📨📨 SEND: gateway exists? ${!!this.gateway}`);
+  
+  // 1. Save to DB
+  const notification = await this.prisma.notification.create({
+    data: {
+      userId: dto.userId,
+      type: dto.type,
+      title: dto.title,
+      message: dto.message,
+      data: dto.data ? JSON.stringify(dto.data) : null,
+      isRead: false,
+    },
+  });
+
+  // 2. Push via WebSocket
+  if (this.gateway) {
+    console.log(`📨📨📨 SEND: sending via WebSocket to ${dto.userId}`);
+    this.gateway.sendToUser(dto.userId, 'notification', {
+      id: notification.id,
+      type: dto.type,
+      title: dto.title,
+      message: dto.message,
+      data: dto.data,
+      isRead: false,
+      createdAt: notification.createdAt,
     });
-
-    // 2. Push via WebSocket if user is currently online
-    if (this.gateway) {
-      this.gateway.sendToUser(dto.userId, 'notification', {
-        id: notification.id,
-        type: dto.type,
-        title: dto.title,
-        message: dto.message,
-        data: dto.data,
-        isRead: false,
-        createdAt: notification.createdAt,
-      });
-    }
-
-    this.logger.log(`Notification sent to ${dto.userId}: ${dto.type}`);
-    return notification;
+  } else {
+    // ✅ AJOUTER CETTE LIGNE
+    console.log(`❌❌❌ SEND: NO GATEWAY! Notification not pushed to ${dto.userId}`);
   }
+
+  this.logger.log(`Notification sent to ${dto.userId}: ${dto.type}`);
+  return notification;
+}
 
   // ── Convenience methods ──────────────────────────────────────────
 
@@ -100,14 +108,19 @@ export class NotificationsService {
   }
 
   async notifyDoctorNewBooking(doctorUserId: string, bookingId: string, patientName: string, date: string) {
-    return this.send({
-      userId: doctorUserId,
-      type: 'NEW_BOOKING',
-      title: '🆕 New Booking',
-      message: `${patientName} booked a session on ${date}.`,
-      data: { bookingId },
-    });
-  }
+  // ✅ AJOUTER CES LOGS
+  console.log(`🔔🔔🔔 NOTIFICATION: doctorUserId=${doctorUserId}`);
+  console.log(`🔔🔔🔔 NOTIFICATION: bookingId=${bookingId}, patient=${patientName}, date=${date}`);
+  console.log(`🔔🔔🔔 NOTIFICATION: gateway exists? ${!!this.gateway}`);
+  
+  return this.send({
+    userId: doctorUserId,
+    type: 'NEW_BOOKING',
+    title: '🆕 New Booking',
+    message: `${patientName} booked a session on ${date}.`,
+    data: { bookingId },
+  });
+}
 
   async notifyPaymentSuccess(patientId: string, bookingId: string, amount: number) {
     return this.send({

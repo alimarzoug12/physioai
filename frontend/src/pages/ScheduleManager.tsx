@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
+import { FaArrowLeft, FaCalendarDays, FaLock, FaLockOpen, FaPlus, FaTrashCan } from "react-icons/fa6";
+import { BiSolidHandUp } from 'react-icons/bi';
 
 // ── Types ──────────────────────────────────────────────────────────
 interface Slot {
@@ -34,6 +36,9 @@ function formatDisplayDate(dateStr: string) {
     weekday: 'long', month: 'long', day: 'numeric',
   });
 }
+const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => {
+  return <Icon className={className} />;
+};
 
 export default function ScheduleManager() {
   const navigate = useNavigate();
@@ -173,7 +178,7 @@ export default function ScheduleManager() {
       <header className="bg-white border-b border-gray-100 p-6 flex items-center justify-between sticky top-0 z-10">
         <button onClick={() => navigate(-1)}
           className="w-12 h-12 flex items-center justify-center text-gray-600 text-2xl hover:bg-gray-100 rounded-xl">
-          ←
+          <IconWrapper icon={FaArrowLeft} />
         </button>
         <div className="text-center">
           <h1 className="text-3xl font-bold text-cyan-500">My Schedule</h1>
@@ -181,7 +186,7 @@ export default function ScheduleManager() {
         </div>
         <button onClick={() => setShowModal(true)}
           className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white text-2xl shadow-lg hover:bg-blue-600 transition">
-          +
+          <IconWrapper icon={FaPlus} />
         </button>
       </header>
 
@@ -296,7 +301,7 @@ export default function ScheduleManager() {
 
           {selectedSlots.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center shadow-sm">
-              <p className="text-5xl mb-4">📅</p>
+              <p className="text-5xl mb-4"><IconWrapper icon={FaCalendarDays} className="text-blue-600 text-xl" /></p>
               <p className="text-gray-400 text-xl mb-4">No slots on this day</p>
               <button onClick={() => setShowModal(true)}
                 className="bg-blue-500 text-white px-6 py-3 rounded-xl text-xl font-semibold">
@@ -336,12 +341,12 @@ export default function ScheduleManager() {
                             ? 'bg-green-100 text-green-600 hover:bg-green-200'
                             : 'bg-orange-100 text-orange-500 hover:bg-orange-200'
                         }`}>
-                        {slot.isBlocked ? '🔓' : '🔒'}
+                        {slot.isBlocked ? <IconWrapper icon={FaLockOpen} className="text-orange-500 text-xl" /> : <IconWrapper icon={FaLock} className="text-orange-500 text-xl" />}
                       </button>
                       <button onClick={() => handleDelete(slot.id)}
                         title="Delete slot"
                         className="w-11 h-11 rounded-xl bg-red-100 text-red-500 hover:bg-red-200 flex items-center justify-center text-xl transition">
-                        🗑
+                        <IconWrapper icon={FaTrashCan} className="text-red-500 text-xl" />
                       </button>
                     </div>
                   )}
@@ -355,7 +360,7 @@ export default function ScheduleManager() {
       {/* ── Quick tip when nothing selected ── */}
       {!selectedDate && !loading && (
         <div className="mx-6 bg-blue-50 border border-blue-100 rounded-2xl p-6 text-center">
-          <p className="text-blue-600 text-xl font-medium mb-2">👆 Tap a date to manage its slots</p>
+          <p className="text-blue-600 text-xl font-medium mb-2 flex items-center justify-center gap-2"><IconWrapper icon={BiSolidHandUp} className="text-blue-600 text-xl" /> Tap a date to manage its slots</p>
           <p className="text-blue-400 text-lg">Use + to create recurring weekly availability</p>
         </div>
       )}

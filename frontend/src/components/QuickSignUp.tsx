@@ -45,7 +45,7 @@ function OAuthButtons({ onError, onLoading }: OAuthButtonsProps) {
         try {
           onLoading(true);
           const result = await api.googleAuth(tokenResponse.access_token);
-          login(result.token, result.user);
+          login(result.accessToken, result.user);
           navigate('/dashboard');
         } catch (err: any) {
           onError(err.message || 'Google login failed');

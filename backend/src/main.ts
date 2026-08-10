@@ -1,40 +1,21 @@
-// import { NestFactory, Reflector } from '@nestjs/core';
-// import { ValidationPipe } from '@nestjs/common';
-// import { ConfigService } from '@nestjs/config';
-// import cookieParser from 'cookie-parser';
-// import { AppModule } from './app.module';
+import './instrument';
 
-// async function bootstrap() {
-//   const app = await NestFactory.create(AppModule);
-//   const config = app.get(ConfigService);
-
-//   // Cookie parser (required for refresh token cookie)
-//   app.use(cookieParser(config.get('cookie.secret')));
-
-//   // Global validation pipe — enforces all DTOs
-//   app.useGlobalPipes(new ValidationPipe({
-//     whitelist:        true,   // strip unknown fields
-//     forbidNonWhitelisted: true, // error on unknown fields
-//     transform:        true,   // auto-transform types
-//     transformOptions: { enableImplicitConversion: true },
-//   }));
-
-//   // CORS — allow credentials for cookies
-//   app.enableCors({
-//     origin:      config.get('app.url'),
-//     credentials: true,       // required for HttpOnly cookie
-//     methods:     ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-//   });
-
-//   await app.listen(process.env.PORT ?? 3000);
-// }
-// bootstrap();
-
+// import * as Sentry from '@sentry/nestjs';
+// import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import { SentryGlobalFilter } from '@sentry/nestjs/setup';
+
+// Sentry.init({
+//   dsn: process.env.SENTRY_DSN,
+//   environment: process.env.NODE_ENV,
+//   integrations: [nodeProfilingIntegration()],
+//   tracesSampleRate: 1.0,
+//   profilesSampleRate: 1.0,
+// });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -44,6 +25,8 @@ async function bootstrap() {
 
   // ✅ Must be before any route handling
   app.use(cookieParser());
+
+  app.useGlobalFilters(new SentryGlobalFilter());
 
   app.useGlobalPipes(new ValidationPipe({
     whitelist:            true,

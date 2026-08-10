@@ -23,9 +23,13 @@ import { UploadsModule } from './uploads/uploads.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { AdminModule } from './admin/admin.module';
 import { BookingCleanupService } from './bookings/booking-cleanup.service';
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
   imports: [
+    SentryModule.forRoot(), 
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       load:     [configuration],
@@ -37,6 +41,11 @@ import { BookingCleanupService } from './bookings/booking-cleanup.service';
     }]),
 
     ScheduleModule.forRoot(),
+
+    PrometheusModule.register({      // ← ADD HERE
+      defaultMetrics: { enabled: true },
+      path: '/metrics',
+    }),
 
     // Feature modules
     MailModule,

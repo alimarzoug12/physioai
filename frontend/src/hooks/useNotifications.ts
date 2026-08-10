@@ -112,12 +112,12 @@ import { io, Socket } from 'socket.io-client';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 export interface NotificationItem {
-  id:        string;
-  type:      string;
-  title:     string;
-  message:   string;
-  data?:     Record<string, any>;
-  isRead:    boolean;
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  data?: Record<string, any>;
+  isRead: boolean;
   createdAt: string;
   isRealTime?: boolean;  // true = just arrived via socket, not yet persisted locally
 }
@@ -127,16 +127,35 @@ let _socket: Socket | null = null;
 let _listeners = 0;
 
 function getSocket(token: string): Socket {
-  if (!_socket || !_socket.connected) {
-    _socket = io(`${API_URL}/notifications`, {
-      auth: { token },
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
-    });
+  // ── If socket exists, check if token changed ───────────────
+  if (_socket) {
+    const currentToken = (_socket.auth as any)?.token;
+    if (currentToken === token && _socket.connected) {
+      return _socket;  // same token, already connected → reuse
+    }
+    // token changed (e.g. after Facebook/Apple login) → destroy old socket
+    _socket.disconnect();
+    _socket = null;
   }
+
+  // ── Create fresh socket with new token ────────────────────
+  _socket = io(`${API_URL}/notifications`, {
+    auth: { token },
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 2000,
+  });
+
   return _socket;
+}
+
+// ── Call this after OAuth login to force fresh connection ──────────
+export function resetSocket(): void {
+  if (_socket) {
+    _socket.disconnect();
+    _socket = null;
+  }
 }
 
 // ── Global notification store shared across components ─────────────
@@ -161,7 +180,7 @@ function pushToStore(item: NotificationItem) {
 }
 
 function setStoreItems(items: NotificationItem[] | any) {
-  _store.items  = Array.isArray(items) ? items : [];
+  _store.items = Array.isArray(items) ? items : [];
   _store.unread = _store.items.filter(i => !i.isRead).length;
   notify();
 }
@@ -185,8 +204,8 @@ export function useNotifications() {
   const [notifications, _setNotifications] = useState<NotificationItem[]>(
     Array.isArray(_store.items) ? [..._store.items] : []
   );
-  const [unreadCount,   _setUnreadCount]   = useState(_store.unread);
-  const [connected,     setConnected]      = useState(false);
+  const [unreadCount, _setUnreadCount] = useState(_store.unread);
+  const [connected, setConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
 
   // Subscribe to global store
@@ -216,7 +235,7 @@ export function useNotifications() {
     socket.off('disconnect');
     socket.off('notification');
 
-    socket.on('connect',    () => setConnected(true));
+    socket.on('connect', () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
 
     socket.on('notification', (data: NotificationItem) => {
@@ -237,6 +256,15 @@ export function useNotifications() {
     });
 
     socket.on('connected', () => setConnected(true));
+  }, []);
+
+  const disconnect = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      setConnected(false);
+      console.log('🔌 WebSocket disconnected manually');
+    }
   }, []);
 
   // Expose setters that also update the global store
@@ -277,6 +305,7 @@ export function useNotifications() {
 
   return {
     connect,
+    disconnect,
     notifications,
     setNotifications,
     unreadCount,

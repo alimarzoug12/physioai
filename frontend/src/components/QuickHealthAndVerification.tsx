@@ -6,6 +6,7 @@ import { IoShieldHalfOutline } from "react-icons/io5";
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { resetSocket } from '../hooks/useNotifications';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => {
   return <Icon className={className} />;
@@ -67,7 +68,7 @@ function OAuthButtons({ onError, onLoading }: OAuthButtonsProps) {
 
         // send access token to backend
         const result = await api.googleAuth(tokenResponse.access_token);
-        login(result.token, result.user);
+        login(result.accessToken, result.user);
         navigate('/dashboard');
       } catch (err: any) {
         onError(err.message || 'Google login failed');
@@ -102,30 +103,53 @@ function OAuthButtons({ onError, onLoading }: OAuthButtonsProps) {
   };
 
   const triggerFacebookLogin = () => {
-    // ✅ plain function — NOT async
-    (window as any).FB.login(
-      function (response: any) {
-        if (response.authResponse) {
-          // async code inside a plain IIFE
-          (async () => {
-            try {
-              onLoading(true);
-              const result = await api.facebookAuth(response.authResponse.accessToken);
-              login(result.token, result.user);
-              navigate('/dashboard');
-            } catch (err: any) {
-              onError(err.message || 'Facebook login failed');
-            } finally {
-              onLoading(false);
+  (window as any).FB.login(
+    function (response: any) {
+      if (response.authResponse) {
+        (async () => {
+          try {
+            onLoading(true);
+            const result = await api.facebookAuth(response.authResponse.accessToken);
+
+            // ── DEBUG: see what backend returns ──────────────
+            console.log('Facebook auth result:', result);
+
+            // ── Make sure token exists before navigating ──────
+            if (!result.token && !result.accessToken) {
+              onError('No token received from server');
+              return;
             }
-          })();
-        } else {
-          onError('Facebook login was cancelled');
-        }
-      },
-      { scope: 'email,public_profile' }
-    );
-  };
+
+            // ── Use whichever field your backend returns ───────
+            const token = result.accessToken;
+            const user  = result.user;
+
+            // ── Store manually to be sure ─────────────────────
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify(user));
+
+            resetSocket();
+
+            // ── Then call login() and navigate ────────────────
+            login(token, user);
+
+            // ── Small delay so WebSocket picks up the token ───
+            setTimeout(() => navigate('/dashboard'), 100);
+
+          } catch (err: any) {
+            console.error('Facebook login error:', err);
+            onError(err.message || 'Facebook login failed');
+          } finally {
+            onLoading(false);
+          }
+        })();
+      } else {
+        onError('Facebook login was cancelled');
+      }
+    },
+    { scope: 'email,public_profile' }
+  );
+};
 
   // ── Apple ─────────────────────────────────────────────────────
   const handleApple = () => {

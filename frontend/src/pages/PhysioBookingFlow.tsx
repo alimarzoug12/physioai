@@ -331,9 +331,9 @@ class PhysioBookingFlow extends React.Component<Props, State> {
           >
             <IconWrapper icon={FaArrowLeft} />
           </button>
-          <DoctorSearch
+          {/* <DoctorSearch
             onSelectDoctor={(doctorId) => this.props.navigate?.(`/book/${doctorId}`)}
-          />
+          /> */}
           <button className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 text-2xl">
             <IconWrapper icon={FaHeart} />
           </button>

@@ -11,17 +11,17 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
+import { NotificationsService } from './notifications.service';  // ✅ AJOUTER CETTE LIGNE
 
 @WebSocketGateway({
   cors: {
-    origin:      'http://localhost:3000',
+    origin: 'http://localhost:3000',
     credentials: true,
   },
   namespace: '/notifications',
 })
 export class NotificationsGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -32,44 +32,83 @@ export class NotificationsGateway
 
   constructor(
     private jwtService: JwtService,
-    private config:     ConfigService,
-  ) {}
+    private config: ConfigService,
+    private notificationsService: NotificationsService,  // ✅ AJOUTER CETTE LIGNE
+  ) {
+    // ✅ AJOUTER CETTE LIGNE — C'est le point clé !
+    this.notificationsService.setGateway(this);
+  }
 
   // ── Connection ──────────────────────────────────────────────────
-  async handleConnection(socket: Socket) {
-    try {
-      // Extract token from handshake
-      const token =
-        socket.handshake.auth?.token ||
-        socket.handshake.headers?.authorization?.replace('Bearer ', '');
+  // async handleConnection(socket: Socket) {
+  //   try {
+  //     // Extract token from handshake
+  //     const token =
+  //       socket.handshake.auth?.token ||
+  //       socket.handshake.headers?.authorization?.replace('Bearer ', '');
 
-      if (!token) {
-        socket.disconnect();
+  //     if (!token) {
+  //       this.logger.warn('No token provided — disconnecting');
+  //       socket.disconnect();
+  //       return;
+  //     }
+
+  //     // ✅ Vérifier que la clé secrète est bien récupérée
+  //     const secret = this.config.get<string>('JWT_ACCESS_SECRET') ||
+  //       this.config.get<string>('jwt.accessSecret');
+
+  //     const payload = this.jwtService.verify(token, { secret });
+
+  //     // ✅ Le champ userId peut être 'sub', 'userId' ou 'id'
+  //     const userId = payload.sub || payload.userId || payload.id;
+
+  //     if (!userId) {
+  //       this.logger.warn('Invalid token — no userId found');
+  //       socket.disconnect();
+  //       return;
+  //     }
+
+  //     socket.data.userId = userId;
+
+  //     // Register socket for this user
+  //     if (!this.userSockets.has(userId)) {
+  //       this.userSockets.set(userId, new Set());
+  //     }
+  //     this.userSockets.get(userId)!.add(socket.id);
+
+  //     // Join a room named after the userId for easy targeting
+  //     socket.join(`user:${userId}`);
+
+  //     this.logger.log(`✅ User ${userId} connected (socket: ${socket.id})`);
+  //     socket.emit('connected', { message: 'Connected to notification service' });
+
+  //   } catch (error) {
+  //     this.logger.warn(`Unauthorized socket connection — disconnecting: ${error.message}`);
+  //     socket.disconnect();
+  //   }
+  // }
+
+  async handleConnection(client: Socket) {
+    try {
+      const token = client.handshake.auth?.token
+        || client.handshake.headers?.authorization?.replace('Bearer ', '');
+
+      if (!token || token === 'null' || token === 'undefined') {
+        this.logger.warn('No token provided — disconnecting');
+        client.disconnect();
         return;
       }
 
       const payload = this.jwtService.verify(token, {
-        secret: this.config.get<string>('jwt.accessSecret'),
+        secret: this.config.get('JWT_SECRET'),
       });
 
-      const userId = payload.userId;
-      socket.data.userId = userId;
+      client.data.userId = payload.userId;
+      this.logger.log(`User ${payload.userId} connected (socket: ${client.id})`);
 
-      // Register socket for this user
-      if (!this.userSockets.has(userId)) {
-        this.userSockets.set(userId, new Set());
-      }
-      this.userSockets.get(userId)!.add(socket.id);
-
-      // Join a room named after the userId for easy targeting
-      socket.join(`user:${userId}`);
-
-      this.logger.log(`User ${userId} connected (socket: ${socket.id})`);
-      socket.emit('connected', { message: 'Connected to notification service' });
-
-    } catch {
-      this.logger.warn(`Unauthorized socket connection — disconnecting`);
-      socket.disconnect();
+    } catch (err: any) {
+      this.logger.warn(`Unauthorized socket connection — disconnecting: ${err.message}`);
+      client.disconnect();
     }
   }
 
@@ -85,9 +124,39 @@ export class NotificationsGateway
   }
 
   // ── Send notification to a specific user ───────────────────────
+  //   sendToUser(userId: string, event: string, data: any) {
+  //   // ✅ AJOUTER CES LOGS
+  //   console.log(`📨📨📨 GATEWAY.sendToUser: userId=${userId}, event=${event}`);
+  //   console.log(`📨📨📨 GATEWAY: rooms:`, this.server.sockets.adapter.rooms.keys());
+
+  //   this.server.to(`user:${userId}`).emit(event, data);
+  //   this.logger.log(`Notification sent to user ${userId}: ${event}`);
+  // }
+
+  // notifications/notifications.gateway.ts
   sendToUser(userId: string, event: string, data: any) {
-    this.server.to(`user:${userId}`).emit(event, data);
-    this.logger.log(`Notification sent to user ${userId}: ${event}`);
+    console.log(`📨📨📨 GATEWAY.sendToUser: userId=${userId}, event=${event}`);
+
+    // ✅ AJOUTER CETTE VÉRIFICATION
+    if (!this.server) {
+      console.log(`❌❌❌ GATEWAY: server not initialized yet!`);
+      return;
+    }
+
+    try {
+      // ✅ VÉRIFIER QUE rooms EXISTE
+      const rooms = this.server.sockets?.adapter?.rooms;
+      if (rooms) {
+        console.log(`📨📨📨 GATEWAY: rooms:`, rooms.keys());
+      } else {
+        console.log(`📨📨📨 GATEWAY: rooms not available yet`);
+      }
+
+      this.server.to(`user:${userId}`).emit(event, data);
+      console.log(`✅ Notification sent to user ${userId}: ${event}`);
+    } catch (error) {
+      console.log(`❌❌❌ GATEWAY error:`, error.message);
+    }
   }
 
   // ── Broadcast to all connected users ───────────────────────────
@@ -102,7 +171,6 @@ export class NotificationsGateway
     @MessageBody() data: { notificationId: string },
   ) {
     this.logger.log(`Mark read: ${data.notificationId} by ${socket.data.userId}`);
-    // Acknowledge
     socket.emit('marked_read', { notificationId: data.notificationId });
   }
 }
