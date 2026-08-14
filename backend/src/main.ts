@@ -14,6 +14,7 @@ import {
   HttpException, HttpStatus, Logger,
 } from '@nestjs/common';
 import type { ArgumentsHost } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 // ── Custom Sentry filter (replaces buggy SentryGlobalFilter) ──────
 @Catch()
@@ -49,13 +50,6 @@ class SentryFilter implements ExceptionFilter {
     }
   }
 }
-// Sentry.init({
-//   dsn: process.env.SENTRY_DSN,
-//   environment: process.env.NODE_ENV,
-//   integrations: [nodeProfilingIntegration()],
-//   tracesSampleRate: 1.0,
-//   profilesSampleRate: 1.0,
-// });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -77,6 +71,37 @@ async function bootstrap() {
     origin: ['http://localhost:3000'],
     credentials: true, // ✅ Required for cookies to work cross-origin
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('PhysioAI API')
+    .setDescription('API documentation for PhysioAI — Physiotherapy Booking Platform (Qatar/GCC)')
+    .setVersion('1.0')
+    .addTag('auth',          'Authentication endpoints')
+    .addTag('users',         'User management')
+    .addTag('doctors',       'Doctor management')
+    .addTag('bookings',      'Booking management')
+    .addTag('chat',          'AI Chat endpoints')
+    .addTag('notifications', 'Notifications')
+    .addTag('admin',         'Admin dashboard')
+    .addBearerAuth(
+      {
+        type:        'http',
+        scheme:      'bearer',
+        bearerFormat:'JWT',
+        name:        'JWT',
+        description: 'Enter your JWT token',
+        in:          'header',
+      },
+      'JWT-auth',
+    )
+    .build();
+
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,  // keeps token after page refresh
+    },
   });
 
   const port = config.get<number>('PORT') || 3001;

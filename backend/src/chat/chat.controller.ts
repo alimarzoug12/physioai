@@ -1,7 +1,10 @@
 import { Body, Controller, Delete, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('chat')
+@ApiBearerAuth('JWT-auth')
 @Controller('chat')
 @UseGuards(JwtAuthGuard)
 export class ChatController {

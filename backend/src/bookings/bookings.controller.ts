@@ -5,12 +5,17 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('bookings')
+@ApiBearerAuth('JWT-auth')
 @Controller('bookings')
 @UseGuards(JwtAuthGuard)
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) { }
 
+  @ApiOperation({ summary: 'Create a new booking' })
+  @ApiResponse({ status: 201, description: 'Booking created' })
   @Post()
   create(@Req() req: any, @Body() dto: CreateBookingDto) {
     return this.bookingsService.createBooking(req.user.userId, dto);
