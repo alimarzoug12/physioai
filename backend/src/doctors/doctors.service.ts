@@ -629,4 +629,93 @@ export class DoctorsService {
     if (hour < 17) return 'afternoon';
     return 'evening';
   }
+
+  async findNearby(params: {
+    lat: number;
+    lon: number;
+    radiusKm: number;
+    page: number;
+    limit: number;
+    specialty?: string;
+  }) {
+    const { lat, lon, radiusKm, page, limit, specialty } = params;
+
+    // Get all doctors with center coordinates
+    const doctors = await this.prisma.doctor.findMany({
+      where: {
+        isAvailable: true,
+        ...(specialty ? { specialties: { hasSome: [specialty] } } : {}),
+        center: {
+          latitude: { not: null },
+          longitude: { not: null },
+        },
+      },
+      include: { user: true, center: true },
+      orderBy: { rating: 'desc' },
+    });
+
+    // Calculate distance using Haversine formula
+    const withDistance = doctors
+      .map(d => {
+        const dist = this.haversine(
+          lat, lon,
+          Number(d.center.latitude!),
+          Number(d.center.longitude!),
+        );
+        return { ...d, distanceKm: dist };
+      })
+      .filter(d => d.distanceKm <= radiusKm)
+      .sort((a, b) => a.distanceKm - b.distanceKm);
+
+    const total = withDistance.length;
+    const paged = withDistance.slice((page - 1) * limit, page * limit);
+
+    return {
+      data: paged.map(d => ({
+        id: d.id,
+        fullName: d.user.fullName,
+        specialty: d.specialties[0] ?? '',
+        specialties: d.specialties,
+        rating: d.rating,
+        pricePerSession: d.pricePerSession,
+        experience: d.yearsExperience ?? null,
+        centerName: d.center?.name ?? '',
+        centerCity: d.center?.city ?? '',
+        centerLat: d.center?.latitude ? Number(d.center.latitude) : null,
+        centerLon: d.center?.longitude ? Number(d.center.longitude) : null,
+        distanceKm: Math.round(d.distanceKm * 10) / 10,
+        avatarUrl: d.user.avatarUrl ||
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(d.user.fullName)}&background=3b82f6&color=fff`,
+        isAvailable: d.isAvailable,
+        languages: d.languages,
+      })),
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1,
+      },
+      searchInfo: {
+        lat, lon, radiusKm,
+        found: total,
+      },
+    };
+  }
+
+  private haversine(
+    lat1: number, lon1: number,
+    lat2: number, lon2: number,
+  ): number {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) *
+      Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
 }

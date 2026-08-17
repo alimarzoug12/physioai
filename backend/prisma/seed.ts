@@ -27,29 +27,62 @@ async function main() {
       phone: '+974 4444 5555',
       email: 'info@dohasports.qa',
       specialties: ['Musculoskeletal', 'Sports Rehabilitation', 'Manual Therapy'],
+      latitude: 25.2697,
+      longitude: 51.5209,
     },
   });
+
   const center2 = await prisma.center.create({
     data: {
-      name: 'Qatar Physiotherapy Center',
-      address: 'West Bay, Tower 12',
+      name: 'West Bay Medical & Physiotherapy Center',
+      address: 'West Bay, Diplomatic Area, Tower 12',
       city: 'Doha',
-      phone: '+974 4000 1234',
-      email: 'info@qatarphysio.qa',
-      specialties: ['Orthopedic', 'Spine Care', 'Pediatric'],
+      phone: '+974 4455 6666',
+      email: 'contact@westbayphysio.qa',
+      specialties: ['Neurological Rehabilitation', 'Post-Surgical', 'Pediatric'],
+      latitude: 25.3285,
+      longitude: 51.5313,
     },
   });
+
   const center3 = await prisma.center.create({
     data: {
-      name: 'Al Rayyan Rehabilitation Clinic',
-      address: 'Al Rayyan Road, Block 5',
+      name: 'Al Rayyan Physiotherapy & Wellness Clinic',
+      address: 'Al Rayyan Road, Zone 38, Building 7',
       city: 'Al Rayyan',
-      phone: '+974 4333 2222',
-      email: 'info@alrayyanrehab.qa',
-      specialties: ['Neurological', 'Post-Surgery', 'Pain Management'],
+      phone: '+974 4466 7777',
+      email: 'info@alrayyanphysio.qa',
+      specialties: ['Sports Medicine', 'Orthopedic', 'Pain Management'],
+      latitude: 25.2522,
+      longitude: 51.4243,
     },
   });
-  console.log('✅ Centers created (3)');
+
+  const center4 = await prisma.center.create({
+    data: {
+      name: 'The Pearl Health & Rehabilitation Center',
+      address: 'Porto Arabia, The Pearl Island, Unit 34',
+      city: 'Doha',
+      phone: '+974 4477 8888',
+      email: 'hello@pearlrehab.qa',
+      specialties: ['Manual Therapy', 'Women Health', 'Geriatric Rehabilitation'],
+      latitude: 25.3701,
+      longitude: 51.5322,
+    },
+  });
+
+  const center5 = await prisma.center.create({
+    data: {
+      name: 'Al Wakrah Rehabilitation & Physiotherapy Center',
+      address: 'Al Wakrah Main Street, Building 22',
+      city: 'Al Wakrah',
+      phone: '+974 4488 9999',
+      email: 'info@wakrahphysio.qa',
+      specialties: ['Musculoskeletal', 'Sports Rehabilitation', 'Home Visit'],
+      latitude: 25.1660,
+      longitude: 51.5986,
+    },
+  });
 
   // ── 2. Doctors ──────────────────────────────────────────────────
   const doctorPwd = await bcrypt.hash('doctor123', 10);

@@ -779,6 +779,24 @@ export const api = {
       { method: 'PATCH', body: JSON.stringify({ reason }) },
     ),
 
-
-
+  getNearbyDoctors: (params: {
+    lat: number;
+    lon: number;
+    radius?: number;
+    specialty?: string;
+    page?: number;
+  }) => {
+    const q = new URLSearchParams({
+      lat: String(params.lat),
+      lon: String(params.lon),
+      radius: String(params.radius ?? 5),
+      page: String(params.page ?? 1),
+    });
+    if (params.specialty) q.set('specialty', params.specialty);
+    return publicFetch<{
+      data: any[];
+      pagination: any;
+      searchInfo: { lat: number; lon: number; radiusKm: number; found: number };
+    }>(`/doctors/nearby?${q.toString()}`);
+  },
 };

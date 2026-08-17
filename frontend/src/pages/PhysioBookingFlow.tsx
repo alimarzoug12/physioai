@@ -6,11 +6,11 @@ import {
   FaList, FaLocationDot, FaMap, FaStar, FaVenusMars, FaCrown,
   FaShieldHalved, FaCheck, FaPhone, FaMedal, FaCalendar, FaLanguage,
   FaBuilding, FaHouseChimneyMedical, FaHandHoldingMedical, FaDumbbell,
-  FaRocket, FaCreditCard, FaMobileScreenButton, FaBuildingColumns,
+  FaRocket, FaCreditCard, FaMobileScreenButton, FaBuildingColumns, FaMagnifyingGlass
 } from 'react-icons/fa6';
 import { TiHome } from 'react-icons/ti';
 import { api } from '../services/api';
-import DoctorSearch from '../components/DoctorSearch';
+// import DoctorSearch from '../components/DoctorSearch';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => (
   <Icon className={className} />
@@ -30,11 +30,18 @@ interface State {
   doctors: Doctor[];
   loading: boolean;
   error: string;
+  searchQuery: string;
   filterNearby: boolean;
   filterRating: boolean;
   filterAvailable: boolean;
   filterPrice: boolean;
   filterGender: 'any' | 'male' | 'female';
+  priceMin: number;
+  priceMax: number;
+  activeFilter: string;
+  nearbyLoading: boolean;
+  userLat: number | null;
+  userLon: number | null;
 }
 interface Props { navigate?: (path: string) => void }
 
@@ -58,11 +65,18 @@ class PhysioBookingFlow extends React.Component<Props, State> {
     doctors: [],
     loading: true,
     error: '',
+    searchQuery: '',
     filterNearby: false,
     filterRating: false,
     filterAvailable: false,
     filterPrice: false,
     filterGender: 'any',
+    priceMin: 0,
+    priceMax: 1000,
+    activeFilter: '',
+    nearbyLoading: false,
+    userLat: null,
+    userLon: null,
   };
 
   async componentDidMount() {
@@ -78,18 +92,94 @@ class PhysioBookingFlow extends React.Component<Props, State> {
     }
   }
 
-  getFilteredDoctors(): Doctor[] {
-    const { doctors, filterRating, filterAvailable, filterPrice } = this.state;
-    let result = [...doctors];
 
+  getFilteredDoctors() {
+    const {
+      doctors, searchQuery, filterRating, filterAvailable,
+      filterPrice, filterGender,
+      filterNearby, userLat, userLon,  // ✅ add these
+    } = this.state;
+
+    const priceMin = (this.state as any).priceMin ?? 0;
+    const priceMax = (this.state as any).priceMax ?? 1000;
+
+    let result = [...(doctors || [])];
+
+    // ✅ Add at the very start of getFilteredDoctors()
+    console.log('activeFilter:', this.state.activeFilter);
+    console.log('userLat:', this.state.userLat);
+    console.log('userLon:', this.state.userLon);
+    console.log('doctors[0]:', this.state.doctors[0]);
+
+    // Search
+    if (searchQuery && searchQuery.trim().length > 0) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((d: any) =>
+        d.name?.toLowerCase().includes(q) ||
+        d.fullName?.toLowerCase().includes(q) ||
+        d.specialty?.toLowerCase().includes(q) ||
+        (Array.isArray(d.specialties) && d.specialties.some((s: string) =>
+          s.toLowerCase().includes(q)
+        ))
+      );
+    }
+
+    // 4+ Rating
     if (filterRating) {
-      result = result.filter(d => d.rating >= 4);
+      result = result.filter((d: any) => (d.rating ?? 0) >= 4);
     }
+
+    // Available Today
     if (filterAvailable) {
-      result = result.filter(d => d.todaySlots && d.todaySlots.length > 0);
+      result = result.filter((d: any) =>
+        d.hasAvailableSlot === true ||
+        d.hasAvailableSlots === true ||
+        (Array.isArray(d.todaySlots) && d.todaySlots.length > 0)
+      );
     }
+
+    // Price Range
     if (filterPrice) {
-      result = result.sort((a, b) => a.pricePerSession - b.pricePerSession);
+      result = result.filter((d: any) => {
+        const price = d.pricePerSession ?? d.price ?? 0;
+        return price >= priceMin && price <= priceMax;
+      });
+    }
+
+    // Gender
+    if (filterGender !== 'any') {
+      result = result.filter((d: any) =>
+        d.gender?.toLowerCase() === filterGender
+      );
+    }
+
+    // ✅ Nearby filter — add this at the end
+    if (filterNearby) {   // ✅ was: if (activeFilter === 'nearby')
+      if (!userLat || !userLon) return [];
+
+      const haversine = (
+        lat1: number, lon1: number,
+        lat2: number, lon2: number,
+      ): number => {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      };
+
+      result = result.filter((d: any) => {
+        const lat = d.centerLat ?? d.center?.latitude;
+        const lon = d.centerLon ?? d.center?.longitude;
+        console.log(d.fullName, '→ lat:', lat, 'lon:', lon);
+        if (!lat || !lon) return false;
+        const dist = haversine(userLat, userLon, Number(lat), Number(lon));
+        console.log(d.fullName, '→ distance:', dist.toFixed(1), 'km');
+        return dist <= 5;
+      });
     }
 
     return result;
@@ -314,34 +404,90 @@ class PhysioBookingFlow extends React.Component<Props, State> {
   }
 
   render() {
-    const { view, doctors, loading, error } = this.state;
+    const { view, doctors, loading, error, activeFilter, userLat, userLon, nearbyLoading } = this.state;
     const filteredDoctors = this.getFilteredDoctors();
     const topDoctor = filteredDoctors[0];
     const otherDoctors = filteredDoctors.slice(1);
+
+    const haversine = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
+    // const filteredDoctors = this.getFilteredDoctors().filter((doc: any) => {
+    //   if (activeFilter === 'nearby') {
+    //     console.log('Doctor:', doc.fullName, 'centerLat:', doc.centerLat, 'centerLon:', doc.centerLon);  // ✅ add
+    //     if (!userLat || !userLon) { console.log('No user location'); return false; }
+    //     if (!doc.centerLat || !doc.centerLon) { console.log(doc.fullName, '— no coordinates'); return false; }
+    //     const dist = haversine(userLat, userLon, doc.centerLat, doc.centerLon);
+    //     console.log(doc.fullName, '— distance:', dist, 'km');  // ✅ add
+    //     return dist <= 5;
+    //   }
+    //   return true;
+    // });
+
+    // const topDoctor = filteredDoctors[0];
+    // const otherDoctors = filteredDoctors.slice(1);
+
 
 
     return (
       <div className="flex flex-col min-h-screen bg-gray-50 overflow-y-auto pb-20">
 
         {/* HEADER */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 relative">
-          <button
-            onClick={() => this.props.navigate?.(-1 as any)}
-            className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-500 text-2xl"
-          >
-            <IconWrapper icon={FaArrowLeft} />
-          </button>
-          {/* <DoctorSearch
-            onSelectDoctor={(doctorId) => this.props.navigate?.(`/book/${doctorId}`)}
-          /> */}
-          <button className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 text-2xl">
-            <IconWrapper icon={FaHeart} />
-          </button>
-          <div className="text-center">
-            <h2 className="text-xl md:text-2xl font-medium text-cyan-500">Recommended Specialists</h2>
-            <p className="text-sm text-gray-500 mt-1 flex items-center justify-center gap-1">
-              <IconWrapper icon={FaLocationDot} className="text-blue-500 text-sm" /> Doha, Qatar
-            </p>
+        <div className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="grid grid-cols-3 items-center gap-3">
+            {/* Left: Back button - aligné à gauche */}
+            <div className="flex justify-start">
+              <button
+                onClick={() => this.props.navigate?.(-1 as any)}
+                className="text-gray-500 text-2xl flex-shrink-0"
+              >
+                <IconWrapper icon={FaArrowLeft} />
+              </button>
+            </div>
+
+            {/* Center: Title - centré */}
+            <div className="text-center">
+              <h2 className="text-xl md:text-2xl font-medium text-cyan-500">Recommended Specialists</h2>
+              <p className="text-sm text-gray-500 mt-1 flex items-center justify-center gap-1">
+                <IconWrapper icon={FaLocationDot} className="text-blue-500 text-sm" /> Doha, Qatar
+              </p>
+            </div>
+
+            {/* Right: Search + Heart - extra right avec justify-end */}
+            <div className="flex justify-end items-center gap-3">
+              {/* Search input - 250px */}
+              <div className="flex items-center gap-2 bg-gray-100 rounded-xl px-3 py-2 w-[250px]">
+                <IconWrapper icon={FaMagnifyingGlass} className="text-gray-400 text-lg flex-shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={this.state.searchQuery}
+                  onChange={e => this.setState({ searchQuery: e.target.value })}
+                  className="flex-1 bg-transparent text-gray-800 text-sm outline-none placeholder-gray-400"
+                />
+                {this.state.searchQuery.length > 0 && (
+                  <button
+                    onClick={() => this.setState({ searchQuery: '' })}
+                    className="text-gray-400 text-sm"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Heart button */}
+              <button className="text-gray-400 text-2xl flex-shrink-0">
+                <IconWrapper icon={FaHeart} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -444,7 +590,30 @@ class PhysioBookingFlow extends React.Component<Props, State> {
                 icon: FaLocationDot,
                 label: 'Nearby (5km)',
                 active: this.state.filterNearby,
-                onClick: () => this.setState(p => ({ filterNearby: !p.filterNearby })),
+                onClick: () => {
+                  const isNearby = !this.state.filterNearby;
+                  if (isNearby) {
+                    // ✅ Get GPS when turning ON
+                    this.setState({ filterNearby: true });
+                    navigator.geolocation.getCurrentPosition(
+                      (pos) => {
+                        this.setState({
+                          userLat: pos.coords.latitude,
+                          userLon: pos.coords.longitude,
+                        });
+                        console.log('Location got:', pos.coords.latitude, pos.coords.longitude);
+                      },
+                      () => {
+                        alert('Could not get your location. Please allow location access.');
+                        this.setState({ filterNearby: false });
+                      },
+                      { timeout: 8000, enableHighAccuracy: true }
+                    );
+                  } else {
+                    // ✅ Clear when turning OFF
+                    this.setState({ filterNearby: false, userLat: null, userLon: null });
+                  }
+                },
               },
               {
                 icon: FaStar,
@@ -478,8 +647,8 @@ class PhysioBookingFlow extends React.Component<Props, State> {
                 key={label}
                 onClick={onClick}
                 className={`px-5 py-3 rounded-full border text-xl font-normal flex items-center gap-2 transition mr-1 ${active
-                    ? 'bg-blue-100 text-blue-700 border-blue-200'
-                    : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                  ? 'bg-blue-100 text-blue-700 border-blue-200'
+                  : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
                   }`}
               >
                 <IconWrapper icon={icon} /> {label}
@@ -489,6 +658,45 @@ class PhysioBookingFlow extends React.Component<Props, State> {
               </button>
             ))}
           </div>
+          {/* Price Range Slider — shown when Price Range filter is active */}
+          {this.state.filterPrice && (
+            <div className="bg-blue-50 rounded-2xl px-5 py-4 mt-1">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-lg font-semibold text-gray-700">Price Range</span>
+                <span className="text-lg text-blue-600 font-bold">
+                  {this.state.priceMin} – {this.state.priceMax} QAR
+                </span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500 w-8">Min</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1000}
+                    step={50}
+                    value={this.state.priceMin}
+                    onChange={e => this.setState({ priceMin: parseInt(e.target.value) })}
+                    className="flex-1 accent-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 w-16 text-right">{this.state.priceMin} QAR</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500 w-8">Max</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1000}
+                    step={50}
+                    value={this.state.priceMax}
+                    onChange={e => this.setState({ priceMax: parseInt(e.target.value) })}
+                    className="flex-1 accent-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 w-16 text-right">{this.state.priceMax} QAR</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* MAP VIEW */}

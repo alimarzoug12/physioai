@@ -1,5 +1,5 @@
 // src/doctors/doctors.controller.ts
-import { Controller, Get, Param, UseGuards, Request, Query, Req } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Request, Query, Req, BadRequestException } from '@nestjs/common';
 import { DoctorsService } from './doctors.service';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { MatchingService } from './matching.service';
@@ -105,5 +105,27 @@ export class DoctorsController {
     @Query('date') date: string,
   ) {
     return this.doctorsService.getSlotsForDate(id, date);
+  }
+
+  @Get('nearby')
+  findNearby(
+    @Query('lat') lat: string,
+    @Query('lon') lon: string,
+    @Query('radius') radius = '5',
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+    @Query('specialty') specialty?: string,
+  ) {
+    if (!lat || !lon) {
+      throw new BadRequestException('lat and lon are required');
+    }
+    return this.doctorsService.findNearby({
+      lat: parseFloat(lat),
+      lon: parseFloat(lon),
+      radiusKm: parseFloat(radius),
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 20,
+      specialty,
+    });
   }
 }
