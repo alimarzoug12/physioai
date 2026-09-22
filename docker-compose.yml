@@ -119,8 +119,7 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=15d'
     networks:
-      physioai-network:
-        driver: bridge
+      - physioai-network
 
   # ── Grafana ────────────────────────────────────────────────
   grafana:
@@ -148,3 +147,7 @@ volumes:
   chroma_data:
   prometheus_data:
   grafana_data:
+
+networks:
+  physioai-network:
+    driver: bridge
