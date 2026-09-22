@@ -119,7 +119,8 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=15d'
     networks:
-      - physioai-network
+      physioai-network:
+        driver: bridge
 
   # ── Grafana ────────────────────────────────────────────────
   grafana:
