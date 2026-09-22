@@ -3,6 +3,7 @@ import os
 import asyncio
 from typing import Optional, List
 
+from fastapi import FastAPI, HTTPException, Response
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -16,6 +17,8 @@ from symptom_extractor import extract_symptoms
 from booking_agent import booking_graph, BookingState
 
 from memory import save_message, get_history, clear_memory, save_context, get_context
+
+from prometheus_client import Counter, Histogram, generate_latest, REGISTRY, Gauge
 
 load_dotenv()
 
@@ -34,6 +37,40 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Métriques Prometheus ──────────────────────────────────────
+# Compteurs
+REQUESTS_TOTAL = Counter("http_requests_total", "Total HTTP requests", ["method", "endpoint"])
+REQUESTS_IN_PROGRESS = Gauge("http_requests_in_progress", "Requests in progress")
+REQUEST_DURATION = Histogram("http_request_duration_seconds", "Request duration", ["method", "endpoint"])
+
+# ── Middleware pour les métriques ────────────────────────────
+from starlette.middleware.base import BaseHTTPMiddleware
+import time
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        method = request.method
+        endpoint = request.url.path
+        
+        REQUESTS_IN_PROGRESS.inc()
+        start_time = time.time()
+        
+        try:
+            response = await call_next(request)
+            duration = time.time() - start_time
+            REQUESTS_TOTAL.labels(method=method, endpoint=endpoint).inc()
+            REQUEST_DURATION.labels(method=method, endpoint=endpoint).observe(duration)
+            return response
+        finally:
+            REQUESTS_IN_PROGRESS.dec()
+
+app.add_middleware(MetricsMiddleware)
+
+# ── Endpoint /metrics ─────────────────────────────────────────
+@app.get("/metrics")
+async def metrics():
+    return Response(content=generate_latest(REGISTRY), media_type="text/plain")
 
 # ── Initialize LangChain + OpenAI ─────────────────────────────
 FINE_TUNED_MODEL = os.getenv("OPENAI_FINE_TUNED_MODEL")

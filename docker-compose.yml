@@ -118,6 +118,8 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=15d'
+    networks:
+      - physioai-network
 
   # ── Grafana ────────────────────────────────────────────────
   grafana:
@@ -136,6 +138,8 @@ services:
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
     depends_on:
       - prometheus
+    networks:
+      - physioai-network
 
 volumes:
   postgres_data:
