@@ -8,10 +8,8 @@ import {
   FaCircleQuestion, FaRightFromBracket,
   FaGaugeHigh, FaServer,
   FaTrophy, FaChartLine, FaHeart,
-  FaDollarSign, FaGraduationCap,
-  FaFlask, FaHandshake, FaNetworkWired,
-  FaBuilding, FaLocationDot, FaChartBar,
-  FaClipboard, FaBriefcase, FaDumbbell,
+  FaDollarSign, FaGraduationCap, FaHandshake, FaNetworkWired,
+  FaBuilding, FaLocationDot, FaChartBar, FaDumbbell,
   FaCalendarDays,
   FaFileMedical,
   FaPrescriptionBottleMedical,
@@ -31,7 +29,7 @@ import {
   FaCheck,
 } from 'react-icons/fa6';
 import { MdOutlineShowChart, MdSettings } from 'react-icons/md';
-import { FaBell, FaVideo, FaComments, FaFileAlt, FaTools } from 'react-icons/fa';
+import { FaBell, FaVideo, FaComments, FaTools } from 'react-icons/fa';
 import { IoChevronForward, IoStatsChart } from 'react-icons/io5';
 import { IoIosClose } from 'react-icons/io';
 import { RiArrowRightUpLongFill } from 'react-icons/ri';
@@ -50,9 +48,9 @@ type Role = 'patient' | 'physiotherapist' | 'healthcenter';
 interface State {
   activeRole: Role;
 }
-interface Props {
-  onClose: () => void;
-}
+// interface Props {
+//   onClose: () => void;
+// }
 
 // page 14 src/pages/SmartRecoveryPlatformSideBar.tsx
 class SmartRecoveryPlatformSideBar extends React.Component<SmartRecoveryPlatformSideBarProps, State> {
