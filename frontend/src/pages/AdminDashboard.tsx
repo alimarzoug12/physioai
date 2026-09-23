@@ -12,7 +12,7 @@ import {
 } from 'react-icons/fa';
 import { MdPayment, MdAnalytics, MdMessage } from 'react-icons/md';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 // ── Status styles ─────────────────────────────────────────────
 const statusColors: Record<string, string> = {

@@ -219,7 +219,7 @@ class BookSession extends React.Component<Props, State> {
   //   try {
   //     const token = localStorage.getItem('token') ?? '';
   //     const response = await fetch(
-  //       `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/doctors/${doctorId}/slots?date=${dateStr}`,
+  //       `${process.env.REACT_APP_API_URL || '/api'}/doctors/${doctorId}/slots?date=${dateStr}`,
   //       { headers: { 'Authorization': `Bearer ${token}` } }
   //     );
 
@@ -355,7 +355,7 @@ class BookSession extends React.Component<Props, State> {
     try {
       const token = localStorage.getItem('token') ?? '';
       const res = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/bookings/estimate-travel-fee`,
+        `${process.env.REACT_APP_API_URL || '/api'}/bookings/estimate-travel-fee`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

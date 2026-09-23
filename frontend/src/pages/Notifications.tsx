@@ -146,7 +146,7 @@ export default function NotificationsWithRouter() {
     requestPermission();
 
     const token = localStorage.getItem('token') ?? '';
-    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+    const API_URL = process.env.REACT_APP_API_URL || '/api';
 
     fetch(`${API_URL}/notifications/feed?limit=30`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -166,7 +166,7 @@ export default function NotificationsWithRouter() {
   const handleMarkAllRead = () => {
     markAllRead();
     const token = localStorage.getItem('token') ?? '';
-    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+    const API_URL = process.env.REACT_APP_API_URL || '/api';
     fetch(`${API_URL}/notifications/read-all`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}` },
@@ -177,7 +177,7 @@ export default function NotificationsWithRouter() {
     if (n.isRead) return;
     markRead(n.id);
     const token = localStorage.getItem('token') ?? '';
-    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+    const API_URL = process.env.REACT_APP_API_URL || '/api';
     fetch(`${API_URL}/notifications/${n.id}/read`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}` },

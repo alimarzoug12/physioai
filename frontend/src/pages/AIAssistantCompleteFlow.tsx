@@ -123,7 +123,7 @@ class AIAssistantCompleteFlow extends React.Component<Props, State> {
     }));
 
     try {
-      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const API_URL = process.env.REACT_APP_API_URL || '/api';
       const token = localStorage.getItem('token') ?? '';
 
       const response = await fetch(`${API_URL}/chat/message`, {

@@ -12,7 +12,7 @@
 //   createdAt: string;
 // }
 
-// const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+// const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 // export function useNotifications() {
 //   // ✅ Use 'any' type for socket to avoid import type errors
@@ -109,7 +109,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 export interface NotificationItem {
   id: string;

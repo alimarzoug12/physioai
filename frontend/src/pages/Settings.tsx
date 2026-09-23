@@ -13,7 +13,7 @@ import {
 import { TbMailFilled } from 'react-icons/tb';
 import { FaCompressArrowsAlt } from 'react-icons/fa';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => <Icon className={className} />;
 

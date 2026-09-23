@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNotifications, NotificationItem } from '../hooks/useNotifications';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const TYPE_ICON: Record<string, string> = {
   BOOKING_CONFIRMED: '✅',

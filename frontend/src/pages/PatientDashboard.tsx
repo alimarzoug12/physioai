@@ -139,7 +139,7 @@ const NotificationIconButton: React.FC<{ onClick: () => void }> = ({ onClick }) 
   React.useEffect(() => {
     connect();
     const token = localStorage.getItem('token') ?? '';
-    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+    const API_URL = process.env.REACT_APP_API_URL || '/api';
 
     fetch(`${API_URL}/notifications/feed?limit=20`, {
       headers: { Authorization: `Bearer ${token}` },
