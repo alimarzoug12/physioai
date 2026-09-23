@@ -2,10 +2,9 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaCalendarPlus, FaStar, FaChartLine, FaDumbbell, FaClock,
-  FaCalendarDay, FaCalendar, FaCircleCheck, FaNoteSticky,
-  FaCommentMedical, FaLightbulb, FaArrowRotateRight, FaDownload,
+  FaCalendarDay, FaCalendar, FaCircleCheck, FaNoteSticky, FaArrowRotateRight, FaDownload,
   FaAngleRight, FaBrain, FaAward, FaCheck, FaFileWaveform,
-  FaArrowLeft, FaComments, FaLocationDot,
+  FaArrowLeft, FaComments,
 } from 'react-icons/fa6';
 import { TbCircleDotted } from 'react-icons/tb';
 import { useAuth } from '../context/AuthContext';

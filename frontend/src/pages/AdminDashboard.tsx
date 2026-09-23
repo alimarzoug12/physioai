@@ -5,10 +5,10 @@ import {
   ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
 import {
-  FaHome, FaCalendarAlt, FaUsers, FaWallet, FaBell, FaSearch,
+  FaHome, FaCalendarAlt, FaUsers, FaWallet, FaSearch,
   FaRobot, FaChartBar, FaCog, FaSignOutAlt, FaArrowUp, FaArrowDown,
   FaBars, FaChevronRight, FaFilter, FaDownload,
-  FaUserMd, FaHeartbeat, FaClinicMedical, FaStar, FaEllipsisV,
+  FaUserMd, FaHeartbeat, FaClinicMedical, FaStar,
 } from 'react-icons/fa';
 import { MdPayment, MdAnalytics, MdMessage } from 'react-icons/md';
 

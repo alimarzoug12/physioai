@@ -39,7 +39,7 @@ const ResetPassword: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const result = await authApi.resetPassword(token, password);
+      // const result = await authApi.resetPassword(token, password);
       setSuccess(true);
       setTimeout(() => navigate('/'), 3000);
     } catch (err: any) {

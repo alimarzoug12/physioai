@@ -4,7 +4,7 @@ import SmartTherapyAssistantSidebarWithRouter from './SmartTherapyAssistantSideb
 import { MdNotifications } from 'react-icons/md';
 import {
   FaCircleCheck, FaCalendarDay, FaArrowUp, FaCheck, FaPhone,
-  FaClock, FaLocationDot, FaBuilding, FaRoute, FaMessage, FaCalendar,
+  FaClock, FaLocationDot, FaBuilding, FaCalendar,
   FaStar, FaChartLine, FaCalendarPlus, FaUsers, FaWallet,
 } from 'react-icons/fa6';
 import { IoIosArrowDown, IoMdSettings } from 'react-icons/io';

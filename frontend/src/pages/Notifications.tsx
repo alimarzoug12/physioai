@@ -115,7 +115,7 @@ interface NotificationsData {
 // ── Main component (functional, replaces class) ────────────────────
 export default function NotificationsWithRouter() {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  // const { token } = useAuth();
 
   // Static page data from REST
   const [pageData, setPageData] = React.useState<NotificationsData | null>(null);

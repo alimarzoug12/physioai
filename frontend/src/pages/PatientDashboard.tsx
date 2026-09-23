@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FaCalendarCheck, FaStar, FaHeartPulse, FaDumbbell, FaChartLine,
+  FaCalendarCheck, FaHeartPulse, FaDumbbell, FaChartLine,
   FaTrophy, FaVideo, FaMessage, FaCalendar, FaClock, FaLocationDot,
   FaLightbulb, FaMoon, FaUserDoctor, FaPlus, FaWallet, FaRobot,
   FaCalendarPlus, FaCheck, FaPersonWalking, FaPhone, FaBed,
@@ -12,7 +12,7 @@ import { BsChatFill } from 'react-icons/bs';
 import { FaHistory } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import NotificationBell from '../components/NotificationBell';
+// import NotificationBell from '../components/NotificationBell';
 import { useNotifications } from '../hooks/useNotifications';
 
 const IconWrapper = ({ icon: Icon, className }: { icon: any; className?: string }) => (
@@ -133,7 +133,7 @@ function statusColor(status: string) {
 
 // Add this outside the class, near the top of PatientDashboard.tsx
 const NotificationIconButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
-  const { notifications, unreadCount, connect } = useNotifications();
+  const { unreadCount, connect } = useNotifications();
 
   // Load feed count on mount
   React.useEffect(() => {
@@ -148,7 +148,7 @@ const NotificationIconButton: React.FC<{ onClick: () => void }> = ({ onClick }) 
       .then((data: any[]) => {
         // unreadCount will update automatically via setUnreadCount in useNotifications
         // but we can also manually trigger it here:
-        const unread = data.filter((n: any) => !n.isRead).length;
+        // const unread = data.filter((n: any) => !n.isRead).length;
         // use the hook's setter — we need to expose it
       })
       .catch(() => { });
@@ -696,7 +696,7 @@ class PatientDashboard extends React.Component<PatientDashboardProps, State> {
             {data?.reminders.map(reminder => {
               const isSession = reminder.type === 'SESSION';
               const isExercise = reminder.type === 'EXERCISE';
-              const isMedication = reminder.type === 'MEDICATION';
+              // const isMedication = reminder.type === 'MEDICATION';
 
               return (
                 <div key={reminder.id} className={`rounded-2xl border p-6 flex items-center gap-4 ${isSession ? 'bg-gradient-to-r from-orange-50 to-yellow-50 border-orange-100' :

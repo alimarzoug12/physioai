@@ -3,21 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { FaSearch } from 'react-icons/fa';
 import {
-  FaArrowLeft, FaCircleCheck, FaCrown, FaUserPen, FaShieldHalved, FaWallet,
+  FaArrowLeft, FaCircleCheck, FaCrown,
   FaUser, FaPhone, FaCakeCandles, FaVenusMars, FaLocationDot, FaHeartPulse,
-  FaPills, FaHandDots, FaDumbbell, FaLanguage, FaClock, FaGlobe, FaCoins,
-  FaCalendarCheck, FaRobot, FaCreditCard, FaStar, FaFingerprint, FaLock,
-  FaEye, FaMapLocationDot, FaKey, FaFileShield, FaMoon, FaTextHeight,
-  FaWifi, FaVolumeHigh, FaBug, FaFileContract, FaDownload,
-  FaUserSlash, FaTriangleExclamation, FaRightFromBracket, FaAngleRight,
-  FaHeadset, FaCircleQuestion, FaCheck, FaXmark,
+  FaPills, FaHandDots, FaDumbbell, FaLanguage, FaClock, FaGlobe, FaCoins, FaRobot, FaFingerprint, FaLock,
+  FaEye, FaMapLocationDot, FaKey, FaMoon, FaTextHeight,
+  FaWifi,
+  FaUserSlash, FaTriangleExclamation, FaRightFromBracket, FaAngleRight, FaCheck, FaXmark,
 } from 'react-icons/fa6';
-import { MdNotifications } from 'react-icons/md';
-import { IoInformationCircle } from 'react-icons/io5';
 import { TbMailFilled } from 'react-icons/tb';
-import { FaSyncAlt, FaCompressArrowsAlt, FaTrashAlt, FaEdit } from 'react-icons/fa';
-import { IoMdColorPalette } from 'react-icons/io';
-import { TiStarburst } from 'react-icons/ti';
+import { FaCompressArrowsAlt } from 'react-icons/fa';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 

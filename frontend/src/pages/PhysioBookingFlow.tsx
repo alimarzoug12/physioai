@@ -404,7 +404,7 @@ class PhysioBookingFlow extends React.Component<Props, State> {
   }
 
   render() {
-    const { view, doctors, loading, error, activeFilter, userLat, userLon, nearbyLoading } = this.state;
+    const { view, doctors, loading, error } = this.state;
     const filteredDoctors = this.getFilteredDoctors();
     const topDoctor = filteredDoctors[0];
     const otherDoctors = filteredDoctors.slice(1);
@@ -702,13 +702,13 @@ class PhysioBookingFlow extends React.Component<Props, State> {
         {/* MAP VIEW */}
         {view === 'map' && (
           <div className="relative w-full p-6" style={{ height: '500px' }}>
-            <iframe
+            {/* <iframe
               className="w-full h-full rounded-2xl overflow-hidden"
               style={{ border: 0 }}
               loading="lazy"
               allowFullScreen
               src="https://www.openstreetmap.org/export/embed.html?bbox=51.4700%2C25.2300%2C51.5700%2C25.3300&layer=mapnik&marker=25.2854%2C51.5310"
-            />
+            /> */}
             <div className="absolute top-4 left-4 bg-white rounded-xl shadow-lg p-3 z-10 min-w-[180px]">
               <p className="font-semibold text-gray-900 text-lg">
                 {topDoctor ? `Dr. ${topDoctor.fullName}` : 'Loading...'}

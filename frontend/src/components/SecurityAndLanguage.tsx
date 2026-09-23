@@ -21,7 +21,7 @@ class SecurityAndLanguage extends React.Component {
   };
 
   render() {
-    const { selectedLanguage } = this.state;
+    // const { selectedLanguage } = this.state;
 
     return (
       <div className="bg-gray-50 flex flex-col items-center">

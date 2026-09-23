@@ -5,7 +5,7 @@ import {
   FaArrowLeft, FaWallet, FaEye, FaEyeSlash, FaShieldHalved, FaPlus,
   FaDownload, FaCreditCard, FaCcVisa, FaCcMastercard, FaBuildingColumns,
   FaUserDoctor, FaCircleCheck, FaFileInvoiceDollar, FaStar, FaFingerprint,
-  FaLock, FaHouse, FaCalendar, FaRobot, FaUser, FaGift, FaApplePay,
+  FaLock, FaGift, FaApplePay,
   FaTriangleExclamation,
 } from 'react-icons/fa6';
 import { MdNotifications } from 'react-icons/md';
